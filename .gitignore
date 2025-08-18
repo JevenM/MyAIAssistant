@@ -1,1 +1,3 @@
-.streamlit/secrets.toml
+.streamlit/*
+chroma_db/*
+__pycache__/login.cpython-310.pyc
