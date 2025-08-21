@@ -1,6 +1,9 @@
+altair==5.5.0
+chromadb==0.4.13
 langchain==0.3.27
 langchain_community==0.3.27
-langchain_core==0.3.72
+langchain_core==0.3.74
+pandas==2.3.1
 Pillow==9.5.0
 Pillow==11.3.0
 pydantic==1.10.13
