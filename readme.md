@@ -3,7 +3,7 @@
  <img width=200px height=200px src="https://i.imgur.com/6wj0hh6.jpg" alt="Project logo"></a>
 </p>
 
-<h3 align="center">Project Title</h3>
+<h3 align="center">MyAIAssistant</h3>
 
 <div align="center">
 
@@ -95,6 +95,8 @@ End with an example of getting some data out of the system or using it for a lit
 
 #### 启动
 ```shell
+conda activate env
+
 streamlit run app.py
 ```
 

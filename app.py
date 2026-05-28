@@ -55,7 +55,7 @@ with st.sidebar:
     # 设置一个可点击打开的展开区域
     with st.expander("🤓找到我的方式"):
         # 本地图片无法直接加载，需先将图片读取加载为bytes流，然后才能正常在streamlit中显示
-        image_path = r"E:\\Desktop\\微信图片_20250803180325.jpg"
+        image_path = r"微信图片_20250803180325.jpg"
         image = Image.open(image_path)
         image_bytes = io.BytesIO()
         image.save(image_bytes, format="JPEG")
