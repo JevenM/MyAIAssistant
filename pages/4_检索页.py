@@ -16,7 +16,11 @@ from langchain.agents.agent_toolkits import VectorStoreToolkit, VectorStoreInfo
 from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
-from langchain_community.chat_models.tongyi import ChatTongyi
+
+# 本地模型: 使用 Ollama 替代通义大模型
+from langchain_ollama import ChatOllama
+# 云端模型: 使用 OpenAI 兼容接口 (通义/DeepSeek)
+from langchain_openai import ChatOpenAI
 from langchain.tools.retriever import create_retriever_tool
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.agents import AgentAction, AgentFinish
@@ -504,11 +508,36 @@ prompt = PromptTemplate.from_template(prompt_template).partial(
     tools="文档检索: 用于从上传的文档中检索与用户问题相关的信息。",
 )
 
-llm = ChatTongyi(
-    model_name="qwen-turbo-latest",
-    streaming=True,
-    dashscope_api_key=st.secrets["keys"]["dashscope_api_key"],
-)
+# API 配置
+DASHSCOPE_API_KEY = "sk-884a7ea43d0e40adba0353f8ea21fc15"
+DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+# 模型配置 (从 session_state 获取，默认本地模型)
+if "model_provider" not in st.session_state:
+    st.session_state.model_provider = "local"
+if "local_model_name" not in st.session_state:
+    st.session_state.local_model_name = "qwen2.5:3b"
+if "cloud_model_name" not in st.session_state:
+    st.session_state.cloud_model_name = "deepseek-v4-flash"
+
+# 获取模型实例
+def get_llm():
+    if st.session_state.model_provider == "local":
+        return ChatOllama(
+            model=st.session_state.local_model_name,
+            streaming=True,
+            temperature=0.7,
+        )
+    else:
+        return ChatOpenAI(
+            model=st.session_state.cloud_model_name,
+            streaming=True,
+            temperature=0.7,
+            api_key=DASHSCOPE_API_KEY,
+            base_url=DASHSCOPE_BASE_URL,
+        )
+
+llm = get_llm()
 
 
 # 创建自定义代理

@@ -16,130 +16,117 @@
 
 ---
 
-<p align="center"> 使用langchain + streamlit + chromadb + langchain_community + langchain_core + m3e-base，实现一个聊天机器人和基于RAG的智能文档检索工具，使用的AI模型是阿里云百炼通义大模型。还有一个记账本功能。主要是基于慕课网的课程、Bilibili 的教程还有GitHub的代码。.
+<p align="center"> 使用langchain + streamlit + chromadb + langchain_community + langchain_core + m3e-base，实现一个聊天机器人和基于RAG的智能文档检索工具，使用的AI模型是阿里云百炼通义大模型。还有一个记账本功能。主要是基于慕课网的课程、Bilibili 的教程还有GitHub的代码。
     <br> 
 </p>
 
-## 📝 Table of Contents
-
-- [About](#about)
-- [Getting Started](#getting_started)
-- [Deployment](#deployment)
-- [Usage](#usage)
-- [Built Using](#built_using)
-- [TODO](../TODO.md)
-- [Contributing](../CONTRIBUTING.md)
-- [Authors](#authors)
-- [Acknowledgments](#acknowledgement)
-
-## 🧐 About <a name = "about"></a>
-
-Write about 1-2 paragraphs describing the purpose of your project.
-
-新增LangGraph，是LangChain的高级库，为大语言模型带来循环计算能力，超越了LangChain的现行工作流，通过循环支持复杂的任务流程。
-
-### 支持功能
-
-#### 聊天记录
-
-#### 聊天问答（可选联网）
-
-#### 基于RAG本地知识库问答
-![alt text](image.png)
-
-#### 记账本
-
-#### 登录注册
 
 
-## 🏁 Getting Started <a name = "getting_started"></a>
+## 📝 目录 / Table of Contents
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See [deployment](#deployment) for notes on how to deploy the project on a live system.
+- [项目简介 About](#about)
+- [功能 Features](#features)
+- [目录结构 Structure](#structure)
+- [快速开始 Getting Started](#getting_started)
+- [依赖 Dependencies](#dependencies)
+- [用法 Usage](#usage)
+- [贡献 Contributing](#contributing)
+- [作者 Authors](#authors)
+- [致谢 Acknowledgements](#acknowledgement)
 
-### Prerequisites
 
-#### 生成依赖包列表
-1. 安装pipreqs
-为了使用pipreqs生成最小化的requirements.txt文件，首先需要在你的环境中安装这个工具。只需一行命令，即可轻松完成安装：
-```shell
-pip install pipreqs
-```
-确保安装完成后，你就可以开始使用pipreqs来精简你的项目依赖了。
 
-2. 运行pipreqs
-在项目的根目录下，运行以下命令以生成requirements.txt文件：
-```shell
-pipreqs ./ --encoding=utf8 --force
-```
-这个命令会扫描你的代码文件，并仅生成项目实际所需的依赖包，排除conda base中的不相关包。生成的requirements.txt文件将干净、精简，与你在项目中手动引用的包完全一致。
+## 🧐 项目简介 About <a name = "about"></a>
 
-注意：pipreqs通过扫描代码来确定项目依赖，因此它更侧重于“按需打包”。如果代码中没有直接导入的包，pipreqs可能无法识别（例如，通过插件或间接依赖安装的包）。
+MyAIAssistant 是一个基于 Streamlit、LangChain、ChromaDB、阿里云通义大模型的智能助手，集成了聊天机器人、RAG 本地知识库检索、记账本等功能，适合个人和开发者扩展。支持 LangGraph 实现大模型循环计算与复杂任务流程。
 
-### Installing
+---
 
-A step by step series of examples that tell you how to get a development env running.
 
-Say what the step will be
+## ✨ 功能 Features <a name="features"></a>
 
-```
-Give the example
+- 聊天机器人（支持联网问答）
+- RAG 本地知识库检索
+- 记账本与统计分析
+- 用户登录注册
+- 多页面支持，便于扩展
+
+---
+
+
+## 📁 目录结构 Structure <a name="structure"></a>
+
+```text
+MyAIAssistant/
+├── app.py                # 主入口
+├── requirements.txt      # Python依赖
+├── environment.txt       # Conda环境依赖
+├── README.md             # 项目说明
+├── users.json            # 用户数据
+├── manage_account.py     # 账户管理
+├── login.py              # 登录注册
+├── learn.py              # 学习/测试页
+├── trial.py              # 试用页
+├── chroma_db/            # 向量数据库
+├── pages/                # Streamlit多页面
+├── .streamlit/           # Streamlit配置
+├── .devcontainer/        # Dev容器配置
+├── images/               # 项目图片
+└── __pycache__/          # Python缓存
 ```
 
-And repeat
+---
 
-```
-until finished
-```
 
-End with an example of getting some data out of the system or using it for a little demo.
+## 📦 依赖 Dependencies <a name="dependencies"></a>
 
-#### 启动
-```shell
-conda activate env
+核心依赖：streamlit、langchain、chromadb、langchain_community、langchain_core、pandas、Pillow、pydantic。详见 requirements.txt 和 environment.txt。
 
-streamlit run app.py
-```
+---
 
-## 🔧 Running the tests <a name = "tests"></a>
 
-Explain how to run the automated tests for this system.
+## 🚀 快速开始 Getting Started <a name="getting_started"></a>
 
-### Break down into end to end tests
+1. 安装依赖
+   ```shell
+   pip install -r requirements.txt
+   # 或使用 conda
+   conda create --name env --file environment.txt
+   conda activate env
+   ```
+2. 启动服务
+   ```shell
+   streamlit run app.py
+   ```
+3. 停止服务 Stop Streamlit app
+    ```shell
+    taskkill /F /IM streamlit.exe 2>/dev/null || pkill -f streamlit 2>/dev/null || echo "Streamlit stopped"
+    ```
 
-Explain what these tests test and why
+---
 
-```
-Give an example
-```
 
-### And coding style tests
+## 🎈 用法 Usage <a name="usage"></a>
 
-Explain what these tests test and why
+1. 登录或注册账号
+2. 选择页面体验聊天、知识检索、记账等功能
+3. 可扩展 pages/ 下的页面，实现更多功能
 
-```
-Give an example
-```
+---
 
-## 🎈 Usage <a name="usage"></a>
 
-Add notes about how to use the system.
+## 🛠️ 贡献 Contributing <a name="contributing"></a>
 
-## 🚀 Deployment <a name = "deployment"></a>
+欢迎提交 issue、pull request 或新功能建议！
 
-Add additional notes about how to deploy this on a live system.
+---
 
-## ⛏️ Built Using <a name = "built_using"></a>
 
-- [MongoDB](https://www.mongodb.com/) - Database
-- [Express](https://expressjs.com/) - Server Framework
-- [VueJs](https://vuejs.org/) - Web Framework
-- [NodeJs](https://nodejs.org/en/) - Server Environment
+---
 
 ## ✍️ Authors <a name = "authors"></a>
 
-- [@kylelobo](https://github.com/kylelobo) - Idea & Initial work
-
-See also the list of [contributors](https://github.com/kylelobo/The-Documentation-Compendium/contributors) who participated in this project.
+- [@antrn](https://github.com/antrn) - Idea & Initial work
 
 ## 🎉 Acknowledgements <a name = "acknowledgement"></a>
 
@@ -147,13 +134,9 @@ See also the list of [contributors](https://github.com/kylelobo/The-Documentatio
 - Inspiration
 - References
 
-
-
 ### Dify
 [基于Dify构建AI原生应用](https://www.bilibili.com/video/BV1BgfBYoEpQ?spm_id_from=333.788.player.switch&vd_source=931b05f7be003850061ee95a1f978f8d&p=13)
 
-![alt text](image-1.png)
-
-![alt text](image-2.png)
-
-![alt text](image-3.png)
+![alt text](images/image-1.png)
+![alt text](images/image-2.png)
+![alt text](images/image-3.png)
