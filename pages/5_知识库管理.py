@@ -73,7 +73,11 @@ with tab1:
         sort_by = st.selectbox("排序", ["更新时间", "创建时间", "名称", "文档数"])
 
     # 获取知识库列表
-    kbs = kb_manager.search_kbs(search_keyword) if search_keyword else kb_manager.list_kbs()
+    kbs = (
+        kb_manager.search_kbs(search_keyword)
+        if search_keyword
+        else kb_manager.list_kbs()
+    )
 
     # 筛选
     if filter_status == "已启用":
@@ -84,7 +88,11 @@ with tab1:
     # 排序
     sort_keys = {"创建时间": "created_at", "名称": "name", "文档数": "doc_count"}
     if sort_by in sort_keys:
-        kbs = sorted(kbs, key=lambda x: getattr(x, sort_keys[sort_by], ""), reverse=(sort_by != "名称"))
+        kbs = sorted(
+            kbs,
+            key=lambda x: getattr(x, sort_keys[sort_by], ""),
+            reverse=(sort_by != "名称"),
+        )
 
     if not kbs:
         st.info("📭 暂无知识库，请切换到「创建知识库」标签页")
@@ -128,12 +136,14 @@ with tab1:
                         file_data = []
                         for i, fname in enumerate(kb.files):
                             size = "N/A"
-                            for fi in (kb.file_infos or []):
+                            for fi in kb.file_infos or []:
                                 if isinstance(fi, dict) and fi.get("name") == fname:
                                     val = fi.get("size", 0)
                                     size = f"{val/1024:.1f} KB" if val else "N/A"
                                     break
-                            file_data.append({"序号": i+1, "文件名": fname, "大小": size})
+                            file_data.append(
+                                {"序号": i + 1, "文件名": fname, "大小": size}
+                            )
                         st.dataframe(pd.DataFrame(file_data), hide_index=True)
                     else:
                         st.info("无文件信息")
@@ -173,9 +183,13 @@ with tab2:
         tags = st.text_input("标签(逗号分隔)", placeholder="合同,法律")
 
     with c2:
-        files = st.file_uploader("上传文件", type=["txt", "docx", "doc"], accept_multiple_files=True)
+        files = st.file_uploader(
+            "上传文件", type=["txt", "docx", "doc"], accept_multiple_files=True
+        )
         if files:
-            st.info(f"已选 {len(files)} 个文件，共 {sum(f.size for f in files)/1024:.1f} KB")
+            st.info(
+                f"已选 {len(files)} 个文件，共 {sum(f.size for f in files)/1024:.1f} KB"
+            )
 
     if st.button("🚀 创建知识库并构建向量库", type="primary"):
         if not name:
@@ -190,7 +204,7 @@ with tab2:
                     uploaded_files=files,
                     description=desc,
                     tags=[t.strip() for t in tags.split(",") if t.strip()],
-                    status_callback=lambda m: status.write(m)
+                    status_callback=lambda m: status.write(m),
                 )
                 status.update(label="完成", state="complete")
 
@@ -206,7 +220,9 @@ with tab3:
     st.markdown("### 🌐 知识图谱可视化与管理")
 
     # 选择知识库
-    kbs_with_data = [kb for kb in kb_manager.list_kbs() if kb_manager.has_graph_data(kb.id)]
+    kbs_with_data = [
+        kb for kb in kb_manager.list_kbs() if kb_manager.has_graph_data(kb.id)
+    ]
 
     if not kbs_with_data:
         st.info("📭 暂无知识图谱，请先在「文档检索」页面构建")
@@ -216,7 +232,9 @@ with tab3:
         selected_ids = []
         for i, kb in enumerate(kbs_with_data):
             with cols[i % len(cols)]:
-                if st.checkbox(f"{kb.name}\n({kb.entity_count}实体)", key=f"sel_{kb.id}"):
+                if st.checkbox(
+                    f"{kb.name}\n({kb.entity_count}实体)", key=f"sel_{kb.id}"
+                ):
                     selected_ids.append(kb.id)
 
         if selected_ids:
@@ -235,17 +253,19 @@ with tab3:
                 st.markdown("---")
 
                 # 可视化控制
-                c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1])
+                c1, c2, c3, c4 = st.columns([0.8, 0.4, 1.5, 0.3])
                 with c1:
                     height = st.slider("高度", 400, 800, 500)
                 with c2:
                     show_labels = st.checkbox(
-                        "显示关系标签", True,
-                        help="在图谱连线上显示关系的类型文字（如'属于'、'包含'等）"
+                        "显示关系标签",
+                        True,
+                        help="在图谱连线上显示关系的类型文字（如'属于'、'包含'等）",
                     )
                     physics = st.checkbox(
-                        "物理引擎", True,
-                        help="启用物理模拟布局，关闭后节点位置固定，适合手动调整后的精细查看"
+                        "物理引擎",
+                        True,
+                        help="启用物理模拟布局，关闭后节点位置固定，适合手动调整后的精细查看",
                     )
                 with c3:
                     types = list(set(e.entity_type for e in merged.entities.values()))
@@ -253,7 +273,9 @@ with tab3:
                     entity_colors = KnowledgeGraphVisualizer.ENTITY_COLORS
 
                     # 按颜色排序类型，保持一致的显示顺序
-                    sorted_types = sorted(types, key=lambda t: (entity_colors.get(t, "#CCCCCC"), t))
+                    sorted_types = sorted(
+                        types, key=lambda t: (entity_colors.get(t, "#CCCCCC"), t)
+                    )
 
                     # 下拉多选框筛选类型
                     sel_types = st.multiselect(
@@ -269,19 +291,34 @@ with tab3:
                         color = entity_colors.get(t, "#CCCCCC")
                         legend_html += f"<span style='display:inline-block;margin:2px 8px 2px 0;'><span style='display:inline-block;width:12px;height:12px;background:{color};border-radius:50%;margin-right:4px;vertical-align:middle;'></span><span style='vertical-align:middle;font-size:12px;'>{t}</span></span>"
                     if legend_html:
-                        st.markdown(f"<div style='margin-top:5px;'>{legend_html}</div>", unsafe_allow_html=True)
+                        st.markdown(
+                            f"<div style='margin-top:5px;'>{legend_html}</div>",
+                            unsafe_allow_html=True,
+                        )
                 with c4:
                     use_3d = st.toggle(
-                        "🌐 3D视图", value=False,
-                        help="切换到3D球状视图，左键旋转、右键平移、滚轮缩放，点击节点查看详情"
+                        "🌐3D视图",
+                        value=False,
+                        help="切换到3D球状视图，左键旋转、右键平移、滚轮缩放，点击节点查看详情",
                     )
                     if use_3d:
                         st.caption("🖱️ 拖拽旋转，滚轮缩放")
 
                 # 渲染可视化（传入筛选后的类型和3D选项）
-                html = render_graph_visualization(merged, height, show_labels, physics, filter_types=sel_types, use_3d=use_3d)
+                html = render_graph_visualization(
+                    merged,
+                    height,
+                    show_labels,
+                    physics,
+                    filter_types=sel_types,
+                    use_3d=use_3d,
+                )
                 st.components.v1.html(html, height=height + 80)
-                st.caption("💡 拖拽调整位置，滚轮缩放，双击节点查看详情" if not use_3d else "💡 3D视图：左键旋转，右键平移，滚轮缩放，点击节点查看详情")
+                st.caption(
+                    "💡 拖拽调整位置，滚轮缩放，双击节点查看详情"
+                    if not use_3d
+                    else "💡 3D视图：左键旋转，右键平移，滚轮缩放，点击节点查看详情"
+                )
 
                 st.markdown("---")
 
@@ -302,26 +339,41 @@ with tab3:
 
                         nc1, nc2 = st.columns(2)
                         with nc1:
-                            new_type = st.selectbox("类型", ENTITY_TYPES,
-                                index=ENTITY_TYPES.index(ent.entity_type) if ent.entity_type in ENTITY_TYPES else 0)
+                            new_type = st.selectbox(
+                                "类型",
+                                ENTITY_TYPES,
+                                index=(
+                                    ENTITY_TYPES.index(ent.entity_type)
+                                    if ent.entity_type in ENTITY_TYPES
+                                    else 0
+                                ),
+                            )
                         with nc2:
-                            new_mentions = st.number_input("次数", 1, 1000, ent.mentions)
+                            new_mentions = st.number_input(
+                                "次数", 1, 1000, ent.mentions
+                            )
 
                         new_desc = st.text_area("描述", ent.description, height=80)
 
                         bc1, bc2 = st.columns(2)
                         with bc1:
                             if st.button("💾 保存", type="primary"):
-                                edit_entity(merged, sel, new_type, new_desc, new_mentions)
-                                kb_manager.save_graph(selected_ids[0],
-                                    KnowledgeBaseSerializer.graph_to_dict(merged))
+                                edit_entity(
+                                    merged, sel, new_type, new_desc, new_mentions
+                                )
+                                kb_manager.save_graph(
+                                    selected_ids[0],
+                                    KnowledgeBaseSerializer.graph_to_dict(merged),
+                                )
                                 st.success("已保存")
                                 st.rerun()
                         with bc2:
                             if st.button("🗑️ 删除"):
                                 delete_entity(merged, sel)
-                                kb_manager.save_graph(selected_ids[0],
-                                    KnowledgeBaseSerializer.graph_to_dict(merged))
+                                kb_manager.save_graph(
+                                    selected_ids[0],
+                                    KnowledgeBaseSerializer.graph_to_dict(merged),
+                                )
                                 st.success("已删除")
                                 st.rerun()
 
@@ -331,14 +383,20 @@ with tab3:
                         with ac1:
                             add_name = st.text_input("名称")
                         with ac2:
-                            add_type = st.selectbox("类型", ENTITY_TYPES[:8], key="add_t")
+                            add_type = st.selectbox(
+                                "类型", ENTITY_TYPES[:8], key="add_t"
+                            )
                         with ac3:
                             add_desc = st.text_input("描述", key="add_d")
 
                         if st.button("➕ 添加实体"):
-                            if add_name and add_entity(merged, add_name, add_type, add_desc):
-                                kb_manager.save_graph(selected_ids[0],
-                                    KnowledgeBaseSerializer.graph_to_dict(merged))
+                            if add_name and add_entity(
+                                merged, add_name, add_type, add_desc
+                            ):
+                                kb_manager.save_graph(
+                                    selected_ids[0],
+                                    KnowledgeBaseSerializer.graph_to_dict(merged),
+                                )
                                 st.success(f"已添加: {add_name}")
                                 st.rerun()
                             else:
@@ -348,16 +406,24 @@ with tab3:
                         if len(entity_names) >= 2:
                             rc1, rc2, rc3 = st.columns(3)
                             with rc1:
-                                r_src = st.selectbox("源实体", entity_names, key="r_src")
+                                r_src = st.selectbox(
+                                    "源实体", entity_names, key="r_src"
+                                )
                             with rc2:
-                                r_type = st.selectbox("关系", RELATION_TYPES, key="r_type")
+                                r_type = st.selectbox(
+                                    "关系", RELATION_TYPES, key="r_type"
+                                )
                             with rc3:
-                                r_tgt = st.selectbox("目标实体", entity_names, key="r_tgt")
+                                r_tgt = st.selectbox(
+                                    "目标实体", entity_names, key="r_tgt"
+                                )
 
                             if st.button("➕ 添加关系"):
                                 if add_relation(merged, r_src, r_tgt, r_type):
-                                    kb_manager.save_graph(selected_ids[0],
-                                        KnowledgeBaseSerializer.graph_to_dict(merged))
+                                    kb_manager.save_graph(
+                                        selected_ids[0],
+                                        KnowledgeBaseSerializer.graph_to_dict(merged),
+                                    )
                                     st.success(f"已添加: {r_src} → {r_tgt}")
                                     st.rerun()
                                 else:

@@ -291,24 +291,24 @@ with st.container():
                 options=[
                     "deepseek-v4-flash",
                     # "deepseek-reasoner",
-                    # "qwen-max",
-                    # "qwen-plus",
+                    "qwen3.6-plus",
+                    "qwen3.6-35b-a3b",
                     # "qwen-turbo",
                 ],
                 index=(
                     [
                         "deepseek-v4-flash",
                         # "deepseek-reasoner",
-                        # "qwen-max",
-                        # "qwen-plus",
+                        "qwen3.6-plus",
+                        "qwen3.6-35b-a3b",
                         # "qwen-turbo",
                     ].index(st.session_state.cloud_model_name)
                     if st.session_state.cloud_model_name
                     in [
                         "deepseek-v4-flash",
                         # "deepseek-reasoner",
-                        # "qwen-max",
-                        # "qwen-plus",
+                        "qwen3.6-plus",
+                        "qwen3.6-35b-a3b",
                         # "qwen-turbo",
                     ]
                     else 0

@@ -264,16 +264,53 @@ class RelationFilter:
 
     # 无效关系词（通常是误判）
     INVALID_RELATION_WORDS = {
-        "的", "是", "了", "和", "与", "在", "有", "为",
-        "这", "那", "他", "她", "它", "我", "你",
-        "可以", "可能", "应该", "必须", "需要",
+        "的",
+        "是",
+        "了",
+        "和",
+        "与",
+        "在",
+        "有",
+        "为",
+        "这",
+        "那",
+        "他",
+        "她",
+        "它",
+        "我",
+        "你",
+        "可以",
+        "可能",
+        "应该",
+        "必须",
+        "需要",
     }
 
     # 有效关系类型
     VALID_RELATION_TYPES = {
-        "属于", "包含", "负责", "位于", "成立于", "开发", "创造", "发明",
-        "使用", "采用", "利用", "提供", "支持", "合作", "隶属于", "导致",
-        "引起", "称为", "叫做", "名为", "并列", "关联", "相关",
+        "属于",
+        "包含",
+        "负责",
+        "位于",
+        "成立于",
+        "开发",
+        "创造",
+        "发明",
+        "使用",
+        "采用",
+        "利用",
+        "提供",
+        "支持",
+        "合作",
+        "隶属于",
+        "导致",
+        "引起",
+        "称为",
+        "叫做",
+        "名为",
+        "并列",
+        "关联",
+        "相关",
     }
 
     def __init__(self, min_entity_len: int = 2, max_entity_len: int = 20):
@@ -374,26 +411,98 @@ class GraphRAGBuilder:
     # 常见实体类型（扩展版）
     ENTITY_TYPES = {
         "人物": [
-            "人", "先生", "女士", "教授", "博士", "经理", "主任", "工程师",
-            "作者", "编辑", "员", "师", "长", "家", "者", "手", "工", "生",
+            "人",
+            "先生",
+            "女士",
+            "教授",
+            "博士",
+            "经理",
+            "主任",
+            "工程师",
+            "作者",
+            "编辑",
+            "员",
+            "师",
+            "长",
+            "家",
+            "者",
+            "手",
+            "工",
+            "生",
         ],
         "组织": [
-            "公司", "集团", "企业", "机构", "大学", "学院", "研究所",
-            "部门", "团队", "中心", "局", "院", "校", "所", "会", "社", "厂",
+            "公司",
+            "集团",
+            "企业",
+            "机构",
+            "大学",
+            "学院",
+            "研究所",
+            "部门",
+            "团队",
+            "中心",
+            "局",
+            "院",
+            "校",
+            "所",
+            "会",
+            "社",
+            "厂",
         ],
         "地点": [
-            "省", "市", "县", "区", "镇", "村", "路", "街", "大楼",
-            "中心", "广场", "公园", "机场", "车站", "港口", "岛", "山", "河",
+            "省",
+            "市",
+            "县",
+            "区",
+            "镇",
+            "村",
+            "路",
+            "街",
+            "大楼",
+            "中心",
+            "广场",
+            "公园",
+            "机场",
+            "车站",
+            "港口",
+            "岛",
+            "山",
+            "河",
         ],
         "时间": ["年", "月", "日", "时", "分", "秒", "世纪", "年代", "周", "季度"],
         "产品": [
-            "系统", "平台", "软件", "硬件", "设备", "产品", "服务", "应用", "APP", "工具",
+            "系统",
+            "平台",
+            "软件",
+            "硬件",
+            "设备",
+            "产品",
+            "服务",
+            "应用",
+            "APP",
+            "工具",
         ],
         "事件": [
-            "会议", "活动", "项目", "计划", "任务", "研究", "比赛", "展览", "发布会",
+            "会议",
+            "活动",
+            "项目",
+            "计划",
+            "任务",
+            "研究",
+            "比赛",
+            "展览",
+            "发布会",
         ],
         "概念": [
-            "技术", "方法", "理论", "模型", "算法", "框架", "协议", "标准", "规范",
+            "技术",
+            "方法",
+            "理论",
+            "模型",
+            "算法",
+            "框架",
+            "协议",
+            "标准",
+            "规范",
         ],
         "数值": ["亿元", "万元", "元", "美元", "亿", "万", "千", "百", "%", "百分比"],
     }
@@ -445,7 +554,9 @@ class GraphRAGBuilder:
         self.disambiguator = EntityDisambiguator()
         self.relation_filter = RelationFilter()
 
-    def _extract_sentence_context(self, text: str, entity_name: str, window: int = 50) -> str:
+    def _extract_sentence_context(
+        self, text: str, entity_name: str, window: int = 50
+    ) -> str:
         """提取实体所在的句子上下文"""
         sentences = re.split(r"[。！？\n]", text)
         for sentence in sentences:
@@ -519,7 +630,9 @@ class GraphRAGBuilder:
                             ):
                                 # 避免自引用
                                 if source != target:
-                                    sentence = self._extract_sentence_context(text, source)
+                                    sentence = self._extract_sentence_context(
+                                        text, source
+                                    )
                                     relations.append(
                                         Relation(
                                             source=source,
@@ -599,7 +712,9 @@ class GraphRAGBuilder:
 
         return []
 
-    def extract_relations_llm(self, text: str, entities: List[Entity] = None) -> List[Relation]:
+    def extract_relations_llm(
+        self, text: str, entities: List[Entity] = None
+    ) -> List[Relation]:
         """
         使用大模型提取关系
 
@@ -913,7 +1028,11 @@ class KnowledgeGraphVisualizer:
     def get_colors_js_object(cls) -> str:
         """生成JavaScript颜色对象代码"""
         items = [f"'{k}': '{v}'" for k, v in cls.ENTITY_COLORS.items()]
-        return "{\n                " + ",\n                ".join(items) + "\n            }"
+        return (
+            "{\n                "
+            + ",\n                ".join(items)
+            + "\n            }"
+        )
 
     def __init__(self, graph: KnowledgeGraph):
         self.graph = graph
@@ -935,14 +1054,24 @@ class KnowledgeGraphVisualizer:
 
         # 出边关系
         out_relations = [
-            {"target": r.target, "type": r.relation_type, "context": getattr(r, 'context', ''), "sentence": getattr(r, 'source_sentence', '')}
+            {
+                "target": r.target,
+                "type": r.relation_type,
+                "context": getattr(r, "context", ""),
+                "sentence": getattr(r, "source_sentence", ""),
+            }
             for r in self.graph.relations
             if r.source == entity_name
         ]
 
         # 入边关系
         in_relations = [
-            {"source": r.source, "type": r.relation_type, "context": getattr(r, 'context', ''), "sentence": getattr(r, 'source_sentence', '')}
+            {
+                "source": r.source,
+                "type": r.relation_type,
+                "context": getattr(r, "context", ""),
+                "sentence": getattr(r, "source_sentence", ""),
+            }
             for r in self.graph.relations
             if r.target == entity_name
         ]
@@ -953,16 +1082,15 @@ class KnowledgeGraphVisualizer:
         for name in related:
             if name in self.graph.entities and name != entity_name:
                 ent = self.graph.entities[name]
-                related_with_type.append({
-                    "name": name,
-                    "type": getattr(ent, 'entity_type', '未知')
-                })
+                related_with_type.append(
+                    {"name": name, "type": getattr(ent, "entity_type", "未知")}
+                )
 
         # 相关文档片段
         contexts = set()
         for r in self.graph.relations:
             if r.source == entity_name or r.target == entity_name:
-                ctx = getattr(r, 'context', '')
+                ctx = getattr(r, "context", "")
                 if ctx:
                     contexts.add(ctx[:200])
         doc_fragments = list(contexts)[:5]
@@ -970,9 +1098,9 @@ class KnowledgeGraphVisualizer:
         return {
             "entity": {
                 "name": entity.name,
-                "type": getattr(entity, 'entity_type', '未知'),
-                "mentions": getattr(entity, 'mentions', 1),
-                "description": getattr(entity, 'description', ''),
+                "type": getattr(entity, "entity_type", "未知"),
+                "mentions": getattr(entity, "mentions", 1),
+                "description": getattr(entity, "description", ""),
             },
             "out_relations": out_relations[:10],
             "in_relations": in_relations[:10],
@@ -981,8 +1109,12 @@ class KnowledgeGraphVisualizer:
         }
 
     def generate_html_visualization(
-        self, height: int = 600, physics: bool = True, show_edge_labels: bool = False,
-        filter_types: list = None, use_3d: bool = False
+        self,
+        height: int = 700,
+        physics: bool = True,
+        show_edge_labels: bool = False,
+        filter_types: list = None,
+        use_3d: bool = False,
     ) -> str:
         """
         生成交互式HTML可视化（支持节点双击弹窗和3D模式）
@@ -1021,10 +1153,14 @@ class KnowledgeGraphVisualizer:
                 }
             )
             # 获取实体详情用于弹窗（兼容旧版本KnowledgeGraph）
-            if hasattr(self.graph, 'get_entity_relations_detail'):
-                entity_details[entity.name] = self.graph.get_entity_relations_detail(entity.name)
+            if hasattr(self.graph, "get_entity_relations_detail"):
+                entity_details[entity.name] = self.graph.get_entity_relations_detail(
+                    entity.name
+                )
             else:
-                entity_details[entity.name] = self._get_entity_detail_fallback(entity.name)
+                entity_details[entity.name] = self._get_entity_detail_fallback(
+                    entity.name
+                )
 
         # 构建边数据（只包含已筛选节点的边）
         edges = []
@@ -1059,9 +1195,13 @@ class KnowledgeGraphVisualizer:
         if use_3d:
             return self._generate_3d_html(nodes, edges, entity_details, height)
         else:
-            return self._generate_2d_html(nodes, edges, entity_details, height, physics, show_edge_labels)
+            return self._generate_2d_html(
+                nodes, edges, entity_details, height, physics, show_edge_labels
+            )
 
-    def _generate_2d_html(self, nodes, edges, entity_details, height, physics, show_edge_labels) -> str:
+    def _generate_2d_html(
+        self, nodes, edges, entity_details, height, physics, show_edge_labels
+    ) -> str:
         """生成2D可视化HTML"""
         html = f"""
 <!DOCTYPE html>
@@ -1355,26 +1495,53 @@ class KnowledgeGraphVisualizer:
         return html
 
     def _generate_3d_html(self, nodes, edges, entity_details, height) -> str:
-        """生成3D可视化HTML（使用3d-force-graph）"""
+        """生成3D可视化HTML（使用3d-force-graph）- 高清光滑球体+完整关系表示"""
+        import json
+
         # 转换数据格式为3d-force-graph格式
         graph_data = {
-            "nodes": [{"id": n["id"], "name": n["label"], "val": n["size"]/5, "color": n["color"], "group": n["group"]} for n in nodes],
-            "links": [{"source": e["source"], "target": e["target"], "relation": e.get("relation_type", "关联")} for e in edges]
+            "nodes": [
+                {
+                    "id": n["id"],
+                    "name": n["label"],
+                    "val": max(n["size"] / 6, 4),
+                    "color": n["color"],
+                    "group": n["group"],
+                }
+                for n in nodes
+            ],
+            "links": [
+                {
+                    "source": e["source"],
+                    "target": e["target"],
+                    "relation": e.get("relation_type", "关联"),
+                }
+                for e in edges
+            ],
         }
 
-        html = f"""
-<!DOCTYPE html>
+        # 实体详情数据JSON
+        entity_details_json = json.dumps(entity_details, ensure_ascii=False)
+        graph_data_json = json.dumps(graph_data, ensure_ascii=False)
+        colors_json = self.get_colors_js_object()
+
+        html = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>知识图谱3D可视化</title>
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
     <script src="https://unpkg.com/3d-force-graph@1.73.0/dist/3d-force-graph.min.js"></script>
     <style>
-        body {{ margin: 0; overflow: hidden; font-family: Arial, sans-serif; }}
+        body {{ margin: 0; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; }}
         #graph-container {{
             width: 100%;
             height: {height}px;
-            background: radial-gradient(circle at center, #1a1a2e 0%, #0f0f1a 100%);
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0d0d1a 50%, #050510 100%);
+            cursor: grab;
+        }}
+        #graph-container:active {{
+            cursor: grabbing;
         }}
         .legend {{
             position: absolute;
@@ -1411,27 +1578,30 @@ class KnowledgeGraphVisualizer:
             z-index: 10;
         }}
         .tooltip {{
-            position: absolute;
-            padding: 10px;
-            background: rgba(0,0,0,0.8);
+            position: fixed;
+            padding: 15px;
+            background: rgba(15,15,25,0.95);
             color: white;
-            border-radius: 4px;
-            font-size: 12px;
+            border-radius: 8px;
+            font-size: 13px;
             pointer-events: none;
             display: none;
-            z-index: 100;
-            max-width: 250px;
+            z-index: 1000;
+            max-width: 320px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
         }}
         .node-label {{
-            position: absolute;
-            padding: 4px 8px;
-            background: rgba(255,255,255,0.9);
-            border-radius: 4px;
-            font-size: 11px;
+            position: fixed;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.98);
+            border-radius: 6px;
+            font-size: 13px;
             pointer-events: none;
             display: none;
             z-index: 50;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid #e0e0e0;
         }}
     </style>
 </head>
@@ -1439,152 +1609,244 @@ class KnowledgeGraphVisualizer:
     <div id="graph-container"></div>
     <div class="legend">
         <strong>实体类型图例</strong><br>
-        <small style="color:#666">点击节点查看详情</small><br><br>
+        <small style="color:#666">共 {len(nodes)} 个实体，{len(edges)} 条关系</small><br><br>
         {self._generate_3d_legend()}
     </div>
-    <div class="controls">
-        🖱️ 左键拖拽旋转 | 右键平移 | 滚轮缩放<br>
-        👆 点击节点查看详情
+
+    <div class="tooltip" id="tooltip">
+        <div id="tooltip-content"></div>
     </div>
-    <div class="tooltip" id="tooltip"></div>
     <div class="node-label" id="node-label"></div>
 
     <script>
-        // 图谱数据
-        const graphData = {self._to_json(graph_data)};
-
-        // 颜色映射
-        const colors = {self.get_colors_js_object()};
-
-        // 获取容器尺寸
+        // 全局变量
         const container = document.getElementById('graph-container');
+        const tooltip = document.getElementById('tooltip');
+        const tooltipContent = document.getElementById('tooltip-content');
+        const nodeLabel = document.getElementById('node-label');
 
-        // 创建3D力图
-        const Graph = ForceGraph3D()
-            (container)
+        // 数据
+        const graphData = {graph_data_json};
+        const entityDetails = {entity_details_json};
+        const colors = {colors_json};
+
+        // 鼠标位置跟踪
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {{
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        }});
+
+        // 创建高分辨率球体几何体
+        const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
+
+        // 创建3D力图配置
+        const Graph = ForceGraph3D()(container)
             .graphData(graphData)
             .nodeLabel('name')
             .nodeColor(d => d.color)
             .nodeVal(d => d.val)
-            .nodeRelSize(6)
-            .linkWidth(1)
-            .linkOpacity(0.6)
-            .linkDirectionalArrowLength(6)
-            .linkDirectionalArrowRelPos(1)
-            .linkDirectionalParticles(2)
-            .linkDirectionalParticleSpeed(0.005)
-            .linkColor(() => 'rgba(150,150,150,0.5)')
+            .nodeOpacity(0.95)
+            .nodeThreeObject(node => {{
+                // 创建光滑球体材质
+                const material = new THREE.MeshPhongMaterial({{
+                    color: node.color,
+                    shininess: 120,
+                    specular: new THREE.Color(0x555555),
+                    transparent: true,
+                    opacity: 0.95
+                }});
+                const mesh = new THREE.Mesh(sphereGeometry, material);
+                mesh.scale.set(node.val, node.val, node.val);
+
+                // 添加柔和发光效果
+                const glowGeometry = new THREE.SphereGeometry(1.3, 32, 32);
+                const glowMaterial = new THREE.MeshBasicMaterial({{
+                    color: node.color,
+                    transparent: true,
+                    opacity: 0.12
+                }});
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                glow.scale.set(node.val, node.val, node.val);
+                mesh.add(glow);
+
+                return mesh;
+            }})
+            // 关系连线配置 - 清晰显示
+            .linkWidth(2.5)
+            .linkOpacity(0.8)
+            .linkColor(() => 'rgba(200,200,220,0.7)')
+            // 方向箭头配置
+            .linkDirectionalArrowLength(12)
+            .linkDirectionalArrowRelPos(0.95)
+            .linkDirectionalArrowColor(() => 'rgba(220,220,240,0.9)')
+            // 流动粒子效果 - 显示关系方向
+            .linkDirectionalParticles(4)
+            .linkDirectionalParticleSpeed(0.01)
+            .linkDirectionalParticleWidth(3)
+            .linkDirectionalParticleColor(() => 'rgba(100,180,255,0.8)')
+            // 背景和场景
             .backgroundColor('rgba(0,0,0,0)')
             .showNavInfo(false)
-            .cameraPosition({{ z: 200 }});
+            .enableNodeDrag(true)
+            .enableNavigationControls(true)
+            .cameraPosition({{ z: 300 }});
 
-        // 节点点击事件
-        Graph.onNodeClick((node) => {{
-            // 聚焦到点击的节点
-            Graph.cameraPosition(
-                {{ x: node.x + 40, y: node.y + 40, z: node.z + 40 }},
-                node,
-                1000
-            );
+        // 添加环境光照
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        Graph.scene().add(ambientLight);
 
-            // 显示节点信息
-            const entityDetail = entityDetails[node.id];
-            if (entityDetail) {{
-                showEntityInfo(entityDetail, node);
-            }}
+        // 添加定向光
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(100, 100, 100);
+        Graph.scene().add(directionalLight);
+
+        // 添加点光源
+        const pointLight = new THREE.PointLight(0x6666ff, 0.4);
+        pointLight.position.set(-100, -100, 100);
+        Graph.scene().add(pointLight);
+
+        // 添加顶部光源（让球体顶部更亮）
+        const topLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        topLight.position.set(0, 200, 0);
+        Graph.scene().add(topLight);
+
+        // 节点点击事件 - 显示详情
+        Graph.onNodeClick((node, event) => {{
+            if (event) event.stopPropagation();
+            showEntityInfo(node);
         }});
 
         // 节点悬停效果
-        const tooltip = document.getElementById('tooltip');
-        const nodeLabel = document.getElementById('node-label');
-
         Graph.onNodeHover((node) => {{
-            container.style.cursor = node ? 'pointer' : 'default';
-
             if (node) {{
-                // 显示标签
+                container.style.cursor = 'pointer';
+                nodeLabel.innerHTML = `<strong style="color:${{node.color}}">${{node.name}}</strong><br><small style="color:#666">${{node.group}}</small>`;
                 nodeLabel.style.display = 'block';
-                nodeLabel.innerHTML = `<strong>${{node.name}}</strong> (${{node.group}})`;
-                nodeLabel.style.left = (event.clientX + 10) + 'px';
-                nodeLabel.style.top = (event.clientY - 30) + 'px';
+                updateLabelPosition();
             }} else {{
+                container.style.cursor = container.dataset.dragging === 'true' ? 'grabbing' : 'grab';
                 nodeLabel.style.display = 'none';
             }}
         }});
 
-        // 实体详情数据
-        const entityDetails = {self._to_json(entity_details)};
+        // 更新标签位置
+        function updateLabelPosition() {{
+            if (nodeLabel.style.display === 'block') {{
+                nodeLabel.style.left = (mouseX + 15) + 'px';
+                nodeLabel.style.top = (mouseY - 10) + 'px';
+                requestAnimationFrame(updateLabelPosition);
+            }}
+        }}
 
-        // 显示实体信息（在控制台或弹窗中）
-        function showEntityInfo(detail, node) {{
-            // 构建信息HTML
-            let info = `<strong style="font-size:14px;color:${{node.color}}">📌 ${{detail.entity.name}}</strong><br>`;
-            info += `<span style="color:#aaa">类型: ${{detail.entity.type}} | 出现: ${{detail.entity.mentions}}次</span><br><br>`;
+        // 显示实体信息弹窗
+        function showEntityInfo(node) {{
+            const detail = entityDetails[node.id];
+            if (!detail) return;
+
+            let html = '';
+            html += `<div style="border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:10px;margin-bottom:12px;">`;
+            html += `<strong style="font-size:18px;color:${{node.color}}">📌 ${{detail.entity.name}}</strong>`;
+            html += `<span style="float:right;background:${{node.color}};color:white;padding:3px 10px;border-radius:4px;font-size:11px;">${{detail.entity.type}}</span>`;
+            html += `</div>`;
+
+            html += `<div style="color:#aaa;margin-bottom:10px;">出现次数: <span style="color:#fff;font-weight:bold;">${{detail.entity.mentions}}</span></div>`;
 
             if (detail.entity.description) {{
-                info += `<div style="margin-bottom:10px;">${{detail.entity.description.substring(0, 100)}}${{detail.entity.description.length > 100 ? '...' : ''}}</div>`;
+                html += `<div style="margin-bottom:15px;line-height:1.6;color:#ddd;">${{detail.entity.description.substring(0, 150)}}${{detail.entity.description.length > 150 ? '...' : ''}}</div>`;
             }}
 
+            // 出边关系
             if (detail.out_relations && detail.out_relations.length > 0) {{
-                info += `<strong>🔗 出边关系:</strong><br>`;
-                detail.out_relations.slice(0, 3).forEach(r => {{
-                    info += `<span style="color:#aaa">→ ${{r.target}}</span> (${{r.type}})<br>`;
+                html += `<div style="margin-bottom:12px;"><strong style="color:#4CAF50;">🔗 出边关系 (${{detail.out_relations.length}}):</strong></div>`;
+                html += `<div style="max-height:100px;overflow-y:auto;margin-bottom:10px;">`;
+                detail.out_relations.slice(0, 6).forEach(r => {{
+                    const targetColor = colors[r.target] || '#aaa';
+                    html += `<div style="margin:4px 0;padding:6px 8px;background:rgba(255,255,255,0.08);border-radius:4px;">`;
+                    html += `<span style="color:${{node.color}}">${{node.name}}</span> <span style="color:#4CAF50">→</span> <strong style="color:${{targetColor}}">${{r.target}}</strong>`;
+                    html += `<br><small style="color:#888;">(${{r.type}})</small>`;
+                    html += `</div>`;
                 }});
-                if (detail.out_relations.length > 3) info += `<span style="color:#888">...还有${{detail.out_relations.length - 3}}个</span><br>`;
+                if (detail.out_relations.length > 6) {{
+                    html += `<div style="color:#666;font-size:11px;text-align:center;">...还有 ${{detail.out_relations.length - 6}} 个</div>`;
+                }}
+                html += `</div>`;
             }}
 
+            // 入边关系
             if (detail.in_relations && detail.in_relations.length > 0) {{
-                info += `<strong>🔙 入边关系:</strong><br>`;
-                detail.in_relations.slice(0, 3).forEach(r => {{
-                    info += `<span style="color:#aaa">${{r.source}} →</span> (${{r.type}})<br>`;
+                html += `<div style="margin-bottom:12px;"><strong style="color:#2196F3;">🔙 入边关系 (${{detail.in_relations.length}}):</strong></div>`;
+                html += `<div style="max-height:100px;overflow-y:auto;">`;
+                detail.in_relations.slice(0, 6).forEach(r => {{
+                    const sourceColor = colors[r.source] || '#aaa';
+                    html += `<div style="margin:4px 0;padding:6px 8px;background:rgba(255,255,255,0.08);border-radius:4px;">`;
+                    html += `<strong style="color:${{sourceColor}}">${{r.source}}</strong> <span style="color:#2196F3">→</span> <span style="color:${{node.color}}">${{node.name}}</span>`;
+                    html += `<br><small style="color:#888;">(${{r.type}})</small>`;
+                    html += `</div>`;
                 }});
-                if (detail.in_relations.length > 3) info += `<span style="color:#888">...还有${{detail.in_relations.length - 3}}个</span><br>`;
+                if (detail.in_relations.length > 6) {{
+                    html += `<div style="color:#666;font-size:11px;text-align:center;">...还有 ${{detail.in_relations.length - 6}} 个</div>`;
+                }}
+                html += `</div>`;
             }}
 
-            // 显示tooltip
-            tooltip.innerHTML = info;
+            tooltipContent.innerHTML = html;
             tooltip.style.display = 'block';
-            tooltip.style.left = (event ? event.clientX : window.innerWidth / 2) + 'px';
-            tooltip.style.top = (event ? event.clientY : window.innerHeight / 2) + 'px';
+            tooltip.style.left = Math.min(mouseX + 20, window.innerWidth - 340) + 'px';
+            tooltip.style.top = Math.min(mouseY, window.innerHeight - 250) + 'px';
 
-            // 3秒后隐藏
+            // 8秒后自动隐藏
             setTimeout(() => {{
-                tooltip.style.display = 'none';
-            }}, 5000);
+                hideTooltip();
+            }}, 8000);
+        }}
+
+        function hideTooltip() {{
+            tooltip.style.display = 'none';
         }}
 
         // 点击空白处隐藏tooltip
-        document.addEventListener('click', (e) => {{
-            if (e.target.id === 'graph-container') {{
-                tooltip.style.display = 'none';
-            }}
+        Graph.onBackgroundClick(() => {{
+            hideTooltip();
         }});
 
-        // 自动旋转（可选）
-        let isRotating = true;
-        const rotationSpeed = 0.001;
+        // 跟踪拖拽状态
+        container.addEventListener('mousedown', () => {{
+            container.dataset.dragging = 'true';
+            container.style.cursor = 'grabbing';
+        }});
+        container.addEventListener('mouseup', () => {{
+            container.dataset.dragging = 'false';
+            container.style.cursor = 'grab';
+        }});
 
-        function animate() {{
-            if (isRotating) {{
-                Graph.cameraPosition({{
-                    x: Graph.camera().position.x * Math.cos(rotationSpeed) - Graph.camera().position.z * Math.sin(rotationSpeed),
-                    y: Graph.camera().position.y,
-                    z: Graph.camera().position.x * Math.sin(rotationSpeed) + Graph.camera().position.z * Math.cos(rotationSpeed)
-                }});
+        // 窗口大小调整
+        window.addEventListener('resize', () => {{
+            Graph.width(container.clientWidth);
+            Graph.height(container.clientHeight);
+        }});
+
+        // 初始大小设置
+        Graph.width(container.clientWidth);
+        Graph.height(container.clientHeight);
+
+        // 添加背景星空效果（可选）
+        function createStars() {{
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 1000;
+            const positions = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount * 3; i++) {{
+                positions[i] = (Math.random() - 0.5) * 2000;
             }}
-            requestAnimationFrame(animate);
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const starMaterial = new THREE.PointsMaterial({{ color: 0x444466, size: 2 }});
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            Graph.scene().add(stars);
         }}
-
-        // 鼠标交互时暂停旋转
-        container.addEventListener('mousedown', () => {{ isRotating = false; }});
-        container.addEventListener('mouseup', () => {{ isRotating = true; }});
-
-        // 启动动画
-        animate();
+        createStars();
     </script>
 </body>
-</html>
-"""
+</html>"""
         return html
 
     def _generate_3d_legend(self) -> str:
@@ -1608,6 +1870,7 @@ class KnowledgeGraphVisualizer:
     def _to_json(self, data) -> str:
         """将数据转换为JSON字符串"""
         import json
+
         return json.dumps(data, ensure_ascii=False)
 
 
