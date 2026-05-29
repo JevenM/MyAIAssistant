@@ -1,19 +1,27 @@
 {
-  "kb_e87f5146a8f9": {
-    "id": "kb_e87f5146a8f9",
-    "name": "知识库_20260529_141512",
+  "kb_dcb2d0c433d2": {
+    "id": "kb_dcb2d0c433d2",
+    "name": "公务员选调生",
     "files": [
-      "借鉴用词.docx"
+      "公务员&选调生.docx"
     ],
-    "file_infos": [],
-    "created_at": "2026-05-29T14:15:12.698600",
-    "updated_at": "2026-05-29T19:21:27.800555",
+    "file_infos": [
+      {
+        "name": "公务员&选调生.docx",
+        "size": 3060221,
+        "path": ""
+      }
+    ],
+    "created_at": "2026-05-29T20:09:17.934642",
+    "updated_at": "2026-05-29T20:14:06.568677",
     "enabled": true,
-    "description": "由 1 个文件创建",
+    "description": "公务员选调生文档",
     "doc_count": 1,
-    "chunk_count": 183,
-    "entity_count": 0,
-    "relation_count": 0,
-    "tags": []
+    "chunk_count": 84,
+    "entity_count": 3444,
+    "relation_count": 265,
+    "tags": [
+      "公务员，选调生"
+    ]
   }
 }

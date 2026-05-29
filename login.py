@@ -47,10 +47,18 @@ def login_and_register(show_warning=True, key_prefix=None):
     if key_prefix is None:
         key_prefix = str(uuid.uuid4())[:8]
 
-    # 自定义样式
+    # 隐藏侧边栏和自定义样式
     st.markdown(
         """
     <style>
+        /* 隐藏侧边栏 */
+        [data-testid="stSidebar"] {
+            display: none;
+        }
+        [data-testid="stSidebarNav"] {
+            display: none;
+        }
+        /* 登录页面样式 */
         .login-header {
             text-align: center;
             padding: 2rem 0;

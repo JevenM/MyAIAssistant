@@ -1,20 +1,19 @@
 """
 文档检索页面 - GraphRAG增强版
 支持多知识库选择、合并检索、知识图谱可视化
-优化：精简流程，减少重复检索，修复回调错误
 """
 
 import streamlit as st
-import tempfile
-import os
 import chromadb
 import uuid
+import tempfile
+import os
 import pandas as pd
 from datetime import datetime
+from typing import List, Dict, Any, Optional, Tuple
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain_community.document_loaders import TextLoader, Docx2txtLoader
-from typing import List, Dict, Any, Optional, Tuple
 from langchain_core.prompts import PromptTemplate
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -23,8 +22,13 @@ from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
 from login import require_login
 
+# 公共工具模块
+from kb_utils import (
+    KnowledgeBaseManager,
+    KnowledgeBaseSerializer,
+    get_embeddings,
+)
 from graphrag import GraphRAGBuilder, KnowledgeGraphVisualizer
-from knowledge_base_manager import KnowledgeBaseManager, KnowledgeBaseSerializer
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from langchain.tools.retriever import create_retriever_tool
@@ -37,7 +41,10 @@ from pydantic import PrivateAttr
 st.set_page_config(page_title="文档问答", layout="wide")
 require_login()
 
-st.title("📄 文档问答（GraphRAG 增强版）")
+st.markdown(
+    f"""<h3 align="center"> 📄 文档问答（GraphRAG 增强版）</h3>""",
+    unsafe_allow_html=True,
+)
 
 # ========== 初始化 ==========
 if "kb_manager" not in st.session_state:
@@ -412,11 +419,19 @@ if retriever:
 
         c1, c2, c3 = st.columns([1, 1, 1])
         with c1:
-            st.toggle("启用增强", key="use_graphrag")
+            st.toggle(
+                "启用增强",
+                key="use_graphrag",
+                help="启用GraphRAG知识图谱增强检索，可以在回答问题时利用实体关系图谱提供更准确的上下文"
+            )
         with c2:
-            st.toggle("LLM抽取", key="use_llm_extract")
+            st.toggle(
+                "LLM抽取",
+                key="use_llm_extract",
+                help="使用大语言模型进行实体和关系抽取（比规则抽取更精确但速度较慢）"
+            )
         with c3:
-            build_btn = st.button("构建图谱", use_container_width=True)
+            build_btn = st.button("打开启动增强构建图谱", use_container_width=True)
 
         if (
             st.session_state.use_graphrag
@@ -469,12 +484,33 @@ if retriever:
                 st.markdown(graph_builder.get_graph_summary())
 
             with st.expander("🌐 知识图谱可视化"):
-                viz_height = st.slider("高度", 400, 800, 500)
+                c1, c2, c3 = st.columns([1, 1, 1])
+                with c1:
+                    viz_height = st.slider("高度", 400, 800, 500)
+                with c2:
+                    show_edge_labels = st.checkbox(
+                        "显示关系标签",
+                        True,
+                        key="rg_show_labels",
+                        help="在图谱连线上显示关系的类型文字（如'属于'、'包含'等）"
+                    )
+                with c3:
+                    use_3d_rg = st.toggle(
+                        "🌐 3D视图",
+                        value=False,
+                        key="rg_use_3d",
+                        help="切换到3D球状视图，可以更直观地观察实体间的空间关系"
+                    )
+
                 visualizer = KnowledgeGraphVisualizer(knowledge_graph)
                 html = visualizer.generate_html_visualization(
-                    height=viz_height, physics=True, show_edge_labels=True
+                    height=viz_height, physics=True, show_edge_labels=show_edge_labels, use_3d=use_3d_rg
                 )
                 st.components.v1.html(html, height=viz_height + 50)
+                if use_3d_rg:
+                    st.caption("💡 3D视图：左键旋转，右键平移，滚轮缩放，点击节点查看详情")
+                else:
+                    st.caption("💡 拖拽调整位置，滚轮缩放，双击节点查看详情")
 
 # ========== 聊天界面 ==========
 if not retriever:
@@ -488,10 +524,10 @@ if not st.session_state.messages[bot_id]:
         {"role": "assistant", "content": "您好，我是文档问答助手，请问有什么可以帮您？"}
     ]
 
-if col2.button("🗑️ 清空对话"):
-    st.session_state.messages[bot_id] = [
-        {"role": "assistant", "content": "您好，我是文档问答助手，请问有什么可以帮您？"}
-    ]
+# if col2.button("🗑️ 清空对话"):
+#     st.session_state.messages[bot_id] = [
+#         {"role": "assistant", "content": "您好，我是文档问答助手，请问有什么可以帮您？"}
+#     ]
 
 # 显示历史消息
 for msg in st.session_state.messages[bot_id]:

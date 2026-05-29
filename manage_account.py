@@ -249,7 +249,7 @@ def get_search_result(query: str) -> str:
 # ========== 页面标题 ==========
 st.markdown('<div class="main-title">🧊 智能助手</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-title">智能对话 · 联网搜索 · <a href="http://localhost:8501/检索页">文档问答</a></div>',
+    '<div class="sub-title">智能对话 · 联网搜索</div>',
     unsafe_allow_html=True,
 )
 
@@ -290,26 +290,26 @@ with st.container():
                 "☁️ 云端模型",
                 options=[
                     "deepseek-v4-flash",
-                    "deepseek-reasoner",
-                    "qwen-max",
-                    "qwen-plus",
-                    "qwen-turbo",
+                    # "deepseek-reasoner",
+                    # "qwen-max",
+                    # "qwen-plus",
+                    # "qwen-turbo",
                 ],
                 index=(
                     [
                         "deepseek-v4-flash",
-                        "deepseek-reasoner",
-                        "qwen-max",
-                        "qwen-plus",
-                        "qwen-turbo",
+                        # "deepseek-reasoner",
+                        # "qwen-max",
+                        # "qwen-plus",
+                        # "qwen-turbo",
                     ].index(st.session_state.cloud_model_name)
                     if st.session_state.cloud_model_name
                     in [
                         "deepseek-v4-flash",
-                        "deepseek-reasoner",
-                        "qwen-max",
-                        "qwen-plus",
-                        "qwen-turbo",
+                        # "deepseek-reasoner",
+                        # "qwen-max",
+                        # "qwen-plus",
+                        # "qwen-turbo",
                     ]
                     else 0
                 ),
@@ -410,7 +410,9 @@ if pt := st.chat_input("请输入您的问题..."):
         Message(content=pt, role="human").model_dump()
     )
     # 保存到持久化存储
-    data_manager.save_chat_history(user, st.session_state.messages["chat_bot"], "chat_bot")
+    data_manager.save_chat_history(
+        user, st.session_state.messages["chat_bot"], "chat_bot"
+    )
 
     with con.chat_message("human"):
         st.write(pt)
@@ -554,4 +556,6 @@ if pt := st.chat_input("请输入您的问题..."):
         Message(content=response, role="ai").model_dump()
     )
     # 保存到持久化存储
-    data_manager.save_chat_history(user, st.session_state.messages["chat_bot"], "chat_bot")
+    data_manager.save_chat_history(
+        user, st.session_state.messages["chat_bot"], "chat_bot"
+    )
