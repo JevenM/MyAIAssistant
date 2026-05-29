@@ -1,15 +1,20 @@
 import streamlit as st
 import pandas as pd
 from login import require_login
+from user_data_manager import get_user_data_manager
 
 # ========== 统一登录检查 ==========
 require_login()
 
 user = st.session_state.logged_in_user
+data_manager = get_user_data_manager()
+
+# 初始化session_state中的records
 if "records" not in st.session_state:
     st.session_state.records = {}
 if user not in st.session_state.records:
-    st.session_state.records[user] = []
+    # 从持久化存储加载
+    st.session_state.records[user] = data_manager.get_account_records(user)
 
 st.title("✨ 小小记账本 ✨")
 
@@ -31,21 +36,24 @@ note = st.text_input("📝 备注")
 if st.button("📥 添加记录"):
     try:
         amount_value = float(amount)
-        st.session_state.records[user].append(
-            {
-                "日期": str(date),
-                "类型": record_type,
-                "分类": category,
-                "金额": amount_value,
-                "备注": note,
-            }
-        )
-        st.success("记录添加成功!")
+        record = {
+            "日期": str(date),
+            "类型": record_type,
+            "分类": category,
+            "金额": amount_value,
+            "备注": note,
+        }
+        st.session_state.records[user].append(record)
+        # 保存到持久化存储
+        data_manager.save_account_records(user, st.session_state.records[user])
+        st.success("✅ 记录添加成功并已保存!")
     except:
         st.warning("金额格式不对，请重新输入数字~~")
 
 if st.button("🧹 清空全部"):
     st.session_state.records[user] = []
+    data_manager.clear_account_records(user)
+    st.success("已清空所有记录")
 
 st.markdown("---")
 st.subheader("🧾 当前记录：")
@@ -61,7 +69,11 @@ if user_records:
         col4.write(row["备注"])
         if col5.button("🗑️", key=f"del_{i}"):
             st.session_state.records[user].pop(i)
+            # 保存到持久化存储
+            data_manager.save_account_records(user, st.session_state.records[user])
             st.rerun()
 else:
     st.info("目前还没有记录哦~")
+
+st.caption("💡 记账数据自动保存在本地")
 st.stop()

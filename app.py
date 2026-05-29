@@ -7,7 +7,7 @@ import streamlit as st
 import io
 import os
 from PIL import Image
-from login import login_and_register, check_login
+from login import login_and_register, check_login, logout
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -31,7 +31,7 @@ if "online" not in st.session_state:
     st.session_state.online = False
 
 if "model_provider" not in st.session_state:
-    st.session_state.model_provider = "cloud"
+    st.session_state.model_provider = "local"
 
 if "local_model_name" not in st.session_state:
     st.session_state.local_model_name = "qwen2.5:3b"
@@ -47,12 +47,6 @@ if "show_thinking" not in st.session_state:
 
 
 # ========== 登录检查 ==========
-def logout():
-    st.session_state.logged_in_user = None
-    st.session_state.messages = {}
-    # 回调中不需要调用 st.rerun()，Streamlit 会自动触发 rerun
-
-
 if not check_login():
     login_and_register(key_prefix="main")
     st.stop()
@@ -84,22 +78,12 @@ with st.sidebar:
             st.warning(f"图片加载失败: {e}")
 
 
-# ========== 导航页面定义 ==========
-def history_items():
-    """历史记录页面"""
-    st.title("📜 聊天历史记录")
-    st.write("以下是您的聊天记录：")
-    if st.session_state.messages.get("chat_bot"):
-        st.json(st.session_state.messages["chat_bot"])
-    else:
-        st.info("暂无聊天记录")
-
-
 # 页面导航配置
 pages = {
     "首页": [
         st.Page("manage_account.py", title="💬 开始聊天"),
         st.Page("pages/4_检索页.py", title="📄 文档检索"),
+        st.Page("pages/5_知识库管理.py", title="📚 知识库管理"),
     ],
     "功能": [
         st.Page("trial.py", title="🎯 功能体验"),
@@ -109,7 +93,6 @@ pages = {
     "更多": [
         st.Page("learn.py", title="📖 关于我们"),
         st.Page("pages/3_信息页.py", title="👤 个人信息"),
-        st.Page(history_items, title="📜 历史记录"),
     ],
 }
 

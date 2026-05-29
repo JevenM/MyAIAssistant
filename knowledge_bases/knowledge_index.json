@@ -1,0 +1,19 @@
+{
+  "kb_e87f5146a8f9": {
+    "id": "kb_e87f5146a8f9",
+    "name": "知识库_20260529_141512",
+    "files": [
+      "借鉴用词.docx"
+    ],
+    "file_infos": [],
+    "created_at": "2026-05-29T14:15:12.698600",
+    "updated_at": "2026-05-29T19:21:27.800555",
+    "enabled": true,
+    "description": "由 1 个文件创建",
+    "doc_count": 1,
+    "chunk_count": 183,
+    "entity_count": 0,
+    "relation_count": 0,
+    "tags": []
+  }
+}

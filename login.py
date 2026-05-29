@@ -118,6 +118,11 @@ def login_and_register(show_warning=True, key_prefix=None):
                         st.session_state["remember_me"] = username
                     else:
                         st.session_state.pop("remember_me", None)
+
+                    # 登录成功后加载用户数据
+                    from user_data_manager import load_user_data_to_session
+                    load_user_data_to_session(username, st.session_state)
+
                     st.success("✅ 登录成功！欢迎回来~")
                     st.rerun()
                 else:
@@ -170,3 +175,20 @@ def login_and_register(show_warning=True, key_prefix=None):
     # 底部提示
     st.markdown("---")
     st.caption("💡 首次使用请先注册账号，已有账号请直接登录")
+
+
+def logout():
+    """退出登录，保存数据"""
+    username = st.session_state.get("logged_in_user")
+    if username:
+        # 保存用户数据
+        from user_data_manager import save_user_data_from_session
+        save_user_data_from_session(username, st.session_state)
+
+    # 清除登录状态
+    st.session_state.logged_in_user = None
+    # 保留记住的用户名
+    remember_me = st.session_state.get("remember_me")
+    st.session_state.clear()
+    if remember_me:
+        st.session_state["remember_me"] = remember_me

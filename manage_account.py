@@ -27,6 +27,7 @@ from langchain_community.utilities.searchapi import SearchApiAPIWrapper
 
 from langchain_core.runnables import RunnableLambda
 from login import require_login
+from user_data_manager import get_user_data_manager
 
 # ========== 页面配置 ==========
 st.set_page_config(
@@ -248,7 +249,7 @@ def get_search_result(query: str) -> str:
 # ========== 页面标题 ==========
 st.markdown('<div class="main-title">🧊 智能助手</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-title">智能对话 · 联网搜索 · 文档问答</div>',
+    '<div class="sub-title">智能对话 · 联网搜索 · <a href="http://localhost:8501/检索页">文档问答</a></div>',
     unsafe_allow_html=True,
 )
 
@@ -266,10 +267,13 @@ with st.container():
             default=st.session_state.model_provider,
             key="model_provider_control",
         )
-        st.session_state.model_provider = model_provider
+        # 检测变化并触发rerun
+        if model_provider != st.session_state.model_provider:
+            st.session_state.model_provider = model_provider
+            st.rerun()
 
     with col2:
-        if model_provider == "local":
+        if st.session_state.model_provider == "local":
             local_model = st.selectbox(
                 "📦 本地模型",
                 options=["qwen2.5:7b", "qwen2.5:3b", "llama3.2", "mistral:7b"],
@@ -278,7 +282,9 @@ with st.container():
                 ),
                 key="local_model_select",
             )
-            st.session_state.local_model_name = local_model
+            if local_model != st.session_state.local_model_name:
+                st.session_state.local_model_name = local_model
+                st.rerun()
         else:
             cloud_model = st.selectbox(
                 "☁️ 云端模型",
@@ -309,14 +315,16 @@ with st.container():
                 ),
                 key="cloud_model_select",
             )
-            st.session_state.cloud_model_name = cloud_model
+            if cloud_model != st.session_state.cloud_model_name:
+                st.session_state.cloud_model_name = cloud_model
+                st.rerun()
 
     with col3:
-        st.toggle("🌐 联网", key="online")
+        st.toggle("🌐 联网搜索", key="online")
 
     with col4:
         # 思考模式开关（仅云端模型可用）
-        if model_provider == "cloud":
+        if st.session_state.model_provider == "cloud":
             st.toggle("🧠 思考", key="show_thinking")
         else:
             st.session_state.show_thinking = False
@@ -391,6 +399,9 @@ else:
 chain = search_chain | prompt | model | StrOutputParser()
 
 # ========== 聊天输入处理 ==========
+user = st.session_state.logged_in_user
+data_manager = get_user_data_manager()
+
 if pt := st.chat_input("请输入您的问题..."):
     model = get_model()
     chain = search_chain | prompt | model | StrOutputParser()
@@ -398,6 +409,9 @@ if pt := st.chat_input("请输入您的问题..."):
     st.session_state.messages["chat_bot"].append(
         Message(content=pt, role="human").model_dump()
     )
+    # 保存到持久化存储
+    data_manager.save_chat_history(user, st.session_state.messages["chat_bot"], "chat_bot")
+
     with con.chat_message("human"):
         st.write(pt)
 
@@ -539,3 +553,5 @@ if pt := st.chat_input("请输入您的问题..."):
     st.session_state.messages["chat_bot"].append(
         Message(content=response, role="ai").model_dump()
     )
+    # 保存到持久化存储
+    data_manager.save_chat_history(user, st.session_state.messages["chat_bot"], "chat_bot")

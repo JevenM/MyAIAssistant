@@ -1,6 +1,7 @@
 """
 GraphRAG 知识图谱增强模块
 实现基于知识图谱的文档检索增强
+支持LLM+规则混合抽取、实体消歧、关系过滤、可视化交互
 """
 
 import re
@@ -18,6 +19,8 @@ class Entity:
     entity_type: str
     description: str = ""
     mentions: int = 1
+    aliases: List[str] = field(default_factory=list)  # 别名列表
+    source_context: str = ""  # 来源上下文
 
 
 @dataclass
@@ -29,6 +32,8 @@ class Relation:
     relation_type: str
     context: str = ""
     weight: float = 1.0
+    confidence: float = 1.0  # 置信度
+    source_sentence: str = ""  # 来源句子
 
 
 @dataclass
@@ -86,6 +91,282 @@ class KnowledgeGraph:
 
         return context
 
+    def get_entity_relations_detail(self, entity_name: str) -> Dict:
+        """
+        获取实体的详细关系信息（用于可视化弹窗）
+
+        Returns:
+            包含出边关系、入边关系、相关实体、相关文档片段的字典
+        """
+        if entity_name not in self.entities:
+            return {}
+
+        entity = self.entities[entity_name]
+
+        # 出边关系
+        out_relations = [
+            {
+                "target": r.target,
+                "type": r.relation_type,
+                "context": r.context,
+                "sentence": r.source_sentence,
+            }
+            for r in self.relations
+            if r.source == entity_name
+        ]
+
+        # 入边关系
+        in_relations = [
+            {
+                "source": r.source,
+                "type": r.relation_type,
+                "context": r.context,
+                "sentence": r.source_sentence,
+            }
+            for r in self.relations
+            if r.target == entity_name
+        ]
+
+        # 相关实体
+        related = self.get_related_entities(entity_name, depth=2)
+        related_with_type = [
+            {"name": name, "type": self.entities[name].entity_type}
+            for name in related
+            if name in self.entities and name != entity_name
+        ]
+
+        # 相关文档片段（从关系上下文中提取）
+        contexts = set()
+        for r in self.relations:
+            if r.source == entity_name or r.target == entity_name:
+                if r.context:
+                    contexts.add(r.context[:200])
+        doc_fragments = list(contexts)[:5]
+
+        return {
+            "entity": {
+                "name": entity.name,
+                "type": entity.entity_type,
+                "mentions": entity.mentions,
+                "description": entity.description,
+            },
+            "out_relations": out_relations[:10],
+            "in_relations": in_relations[:10],
+            "related_entities": related_with_type[:15],
+            "doc_fragments": doc_fragments,
+        }
+
+
+class EntityDisambiguator:
+    """实体消歧与标准化器"""
+
+    # 常见同义词词典（可扩展）
+    SYNONYM_DICT = {
+        # 人物称谓
+        "张三老师": "张三",
+        "张先生": "张三",
+        "李四博士": "李四",
+        "李博士": "李四",
+        # 组织简称
+        "阿里": "阿里巴巴",
+        "阿里巴巴集团": "阿里巴巴",
+        "腾讯公司": "腾讯",
+        "百度公司": "百度",
+        # 地点简称
+        "北京城": "北京",
+        "上海城": "上海",
+    }
+
+    # 实体类型标准化映射
+    TYPE_NORMALIZATION = {
+        "人": "人物",
+        "员": "人物",
+        "师": "人物",
+        "公司": "组织",
+        "企业": "组织",
+        "集团": "组织",
+        "省": "地点",
+        "市": "地点",
+        "县": "地点",
+        "年": "时间",
+        "月": "时间",
+        "日": "时间",
+    }
+
+    def __init__(self, custom_synonyms: Dict[str, str] = None):
+        """
+        初始化消歧器
+
+        Args:
+            custom_synonyms: 自定义同义词词典
+        """
+        self.synonyms = {**self.SYNONYM_DICT, **(custom_synonyms or {})}
+
+    def normalize_entity_name(self, name: str) -> str:
+        """标准化实体名称"""
+        # 去除前后空格
+        name = name.strip()
+
+        # 查找同义词
+        if name in self.synonyms:
+            return self.synonyms[name]
+
+        # 去除常见后缀（如"的"、"了"等）
+        name = re.sub(r"[的了吗呢]", "", name)
+
+        return name
+
+    def normalize_entity_type(self, entity_type: str) -> str:
+        """标准化实体类型"""
+        if entity_type in self.TYPE_NORMALIZATION:
+            return self.TYPE_NORMALIZATION[entity_type]
+        return entity_type
+
+    def is_same_entity(self, name1: str, name2: str) -> bool:
+        """判断两个名称是否指向同一实体"""
+        n1 = self.normalize_entity_name(name1)
+        n2 = self.normalize_entity_name(name2)
+        return n1 == n2
+
+    def merge_entities(self, entities: List[Entity]) -> List[Entity]:
+        """
+        合并重复实体
+
+        Args:
+            entities: 原始实体列表
+
+        Returns:
+            合并后的实体列表
+        """
+        merged = {}
+        for entity in entities:
+            normalized_name = self.normalize_entity_name(entity.name)
+            normalized_type = self.normalize_entity_type(entity.entity_type)
+
+            if normalized_name in merged:
+                # 合并信息
+                merged[normalized_name].mentions += entity.mentions
+                if entity.description and not merged[normalized_name].description:
+                    merged[normalized_name].description = entity.description
+                if entity.name != normalized_name:
+                    if entity.name not in merged[normalized_name].aliases:
+                        merged[normalized_name].aliases.append(entity.name)
+            else:
+                entity.name = normalized_name
+                entity.entity_type = normalized_type
+                merged[normalized_name] = entity
+
+        return list(merged.values())
+
+
+class RelationFilter:
+    """关系过滤器"""
+
+    # 无效关系词（通常是误判）
+    INVALID_RELATION_WORDS = {
+        "的", "是", "了", "和", "与", "在", "有", "为",
+        "这", "那", "他", "她", "它", "我", "你",
+        "可以", "可能", "应该", "必须", "需要",
+    }
+
+    # 有效关系类型
+    VALID_RELATION_TYPES = {
+        "属于", "包含", "负责", "位于", "成立于", "开发", "创造", "发明",
+        "使用", "采用", "利用", "提供", "支持", "合作", "隶属于", "导致",
+        "引起", "称为", "叫做", "名为", "并列", "关联", "相关",
+    }
+
+    def __init__(self, min_entity_len: int = 2, max_entity_len: int = 20):
+        """
+        初始化关系过滤器
+
+        Args:
+            min_entity_len: 实体最小长度
+            max_entity_len: 实体最大长度
+        """
+        self.min_entity_len = min_entity_len
+        self.max_entity_len = max_entity_len
+
+    def is_valid_entity(self, name: str) -> bool:
+        """检查实体是否有效"""
+        if not name:
+            return False
+
+        # 长度检查
+        if len(name) < self.min_entity_len or len(name) > self.max_entity_len:
+            return False
+
+        # 纯数字检查
+        if name.isdigit():
+            return False
+
+        # 纯标点检查
+        if re.match(r"^[^\w一-鿿]+$", name):
+            return False
+
+        # 无效词检查
+        if name in self.INVALID_RELATION_WORDS:
+            return False
+
+        return True
+
+    def is_valid_relation_type(self, relation_type: str) -> bool:
+        """检查关系类型是否有效"""
+        if not relation_type:
+            return False
+        return relation_type in self.VALID_RELATION_TYPES or len(relation_type) >= 2
+
+    def filter_relation(self, relation: Relation) -> Tuple[bool, str]:
+        """
+        过滤单个关系
+
+        Returns:
+            (是否有效, 原因)
+        """
+        # 实体有效性检查
+        if not self.is_valid_entity(relation.source):
+            return False, f"源实体无效: {relation.source}"
+        if not self.is_valid_entity(relation.target):
+            return False, f"目标实体无效: {relation.target}"
+
+        # 自引用检查
+        if relation.source == relation.target:
+            return False, "自引用关系"
+
+        # 关系类型检查
+        if not self.is_valid_relation_type(relation.relation_type):
+            return False, f"关系类型无效: {relation.relation_type}"
+
+        # 实体相似度检查（避免相似实体间的无意义关系）
+        if self._is_similar_entity(relation.source, relation.target):
+            return False, f"实体过于相似: {relation.source} vs {relation.target}"
+
+        return True, "有效"
+
+    def _is_similar_entity(self, name1: str, name2: str) -> bool:
+        """检查两个实体是否过于相似"""
+        # 完全包含
+        if name1 in name2 or name2 in name1:
+            return True
+
+        # 计算字符重叠率
+        common = set(name1) & set(name2)
+        if len(common) / max(len(set(name1)), len(set(name2))) > 0.8:
+            return True
+
+        return False
+
+    def filter_relations(self, relations: List[Relation]) -> List[Relation]:
+        """过滤关系列表"""
+        filtered = []
+        for rel in relations:
+            is_valid, reason = self.filter_relation(rel)
+            if is_valid:
+                filtered.append(rel)
+            else:
+                print(f"关系过滤: {reason}")
+        return filtered
+
 
 class GraphRAGBuilder:
     """知识图谱构建器"""
@@ -93,98 +374,26 @@ class GraphRAGBuilder:
     # 常见实体类型（扩展版）
     ENTITY_TYPES = {
         "人物": [
-            "人",
-            "先生",
-            "女士",
-            "教授",
-            "博士",
-            "经理",
-            "主任",
-            "工程师",
-            "作者",
-            "编辑",
-            "员",
-            "师",
-            "长",
-            "家",
-            "者",
-            "手",
-            "工",
-            "生",
+            "人", "先生", "女士", "教授", "博士", "经理", "主任", "工程师",
+            "作者", "编辑", "员", "师", "长", "家", "者", "手", "工", "生",
         ],
         "组织": [
-            "公司",
-            "集团",
-            "企业",
-            "机构",
-            "大学",
-            "学院",
-            "研究所",
-            "部门",
-            "团队",
-            "中心",
-            "局",
-            "院",
-            "校",
-            "所",
-            "会",
-            "社",
-            "厂",
+            "公司", "集团", "企业", "机构", "大学", "学院", "研究所",
+            "部门", "团队", "中心", "局", "院", "校", "所", "会", "社", "厂",
         ],
         "地点": [
-            "省",
-            "市",
-            "县",
-            "区",
-            "镇",
-            "村",
-            "路",
-            "街",
-            "大楼",
-            "中心",
-            "广场",
-            "公园",
-            "机场",
-            "车站",
-            "港口",
-            "岛",
-            "山",
-            "河",
+            "省", "市", "县", "区", "镇", "村", "路", "街", "大楼",
+            "中心", "广场", "公园", "机场", "车站", "港口", "岛", "山", "河",
         ],
         "时间": ["年", "月", "日", "时", "分", "秒", "世纪", "年代", "周", "季度"],
         "产品": [
-            "系统",
-            "平台",
-            "软件",
-            "硬件",
-            "设备",
-            "产品",
-            "服务",
-            "应用",
-            "APP",
-            "工具",
+            "系统", "平台", "软件", "硬件", "设备", "产品", "服务", "应用", "APP", "工具",
         ],
         "事件": [
-            "会议",
-            "活动",
-            "项目",
-            "计划",
-            "任务",
-            "研究",
-            "比赛",
-            "展览",
-            "发布会",
+            "会议", "活动", "项目", "计划", "任务", "研究", "比赛", "展览", "发布会",
         ],
         "概念": [
-            "技术",
-            "方法",
-            "理论",
-            "模型",
-            "算法",
-            "框架",
-            "协议",
-            "标准",
-            "规范",
+            "技术", "方法", "理论", "模型", "算法", "框架", "协议", "标准", "规范",
         ],
         "数值": ["亿元", "万元", "元", "美元", "亿", "万", "千", "百", "%", "百分比"],
     }
@@ -233,6 +442,16 @@ class GraphRAGBuilder:
         """
         self.llm = llm
         self.graph = KnowledgeGraph()
+        self.disambiguator = EntityDisambiguator()
+        self.relation_filter = RelationFilter()
+
+    def _extract_sentence_context(self, text: str, entity_name: str, window: int = 50) -> str:
+        """提取实体所在的句子上下文"""
+        sentences = re.split(r"[。！？\n]", text)
+        for sentence in sentences:
+            if entity_name in sentence:
+                return sentence.strip()
+        return text[:100]
 
     def extract_entities_rules(self, text: str) -> List[Entity]:
         """基于规则的实体提取"""
@@ -252,11 +471,13 @@ class GraphRAGBuilder:
                         len(text), text.find(entity_name) + len(entity_name) + 50
                     )
                     context = text[start_idx:end_idx]
+                    sentence = self._extract_sentence_context(text, entity_name)
                     entities.append(
                         Entity(
                             name=entity_name,
                             entity_type=entity_type,
-                            description=context[:100],  # 正确使用 description 参数
+                            description=context[:100],
+                            source_context=sentence,
                         )
                     )
 
@@ -265,9 +486,13 @@ class GraphRAGBuilder:
         quoted_matches = re.findall(quoted_pattern, text)
         for match in quoted_matches:
             if len(match) >= 2 and len(match) <= 20:
+                sentence = self._extract_sentence_context(text, match)
                 entities.append(
                     Entity(
-                        name=match, entity_type="概念", description=f"引号中提到的概念"
+                        name=match,
+                        entity_type="概念",
+                        description="引号中提到的概念",
+                        source_context=sentence,
                     )
                 )
 
@@ -294,12 +519,14 @@ class GraphRAGBuilder:
                             ):
                                 # 避免自引用
                                 if source != target:
+                                    sentence = self._extract_sentence_context(text, source)
                                     relations.append(
                                         Relation(
                                             source=source,
                                             target=target,
                                             relation_type=relation_type,
                                             context=text[:100],
+                                            source_sentence=sentence,
                                         )
                                     )
             except Exception as e:
@@ -313,12 +540,14 @@ class GraphRAGBuilder:
             if len(match) == 2:
                 source, target = match[0].strip(), match[1].strip()
                 if source != target:
+                    sentence = self._extract_sentence_context(text, source)
                     relations.append(
                         Relation(
                             source=source,
                             target=target,
                             relation_type="并列",
                             context=text[:100],
+                            source_sentence=sentence,
                         )
                     )
 
@@ -333,12 +562,16 @@ class GraphRAGBuilder:
             prompt = f"""请从以下文本中提取实体，按JSON格式返回：
 
 文本：
-{text}
+{text[:2000]}
 
 请返回如下格式的JSON：
-{{"entities": [{{"name": "实体名", "type": "类型", "description": "简短描述"}}]}}
+{{"entities": [{{"name": "实体名", "type": "类型（人物/组织/地点/时间/产品/事件/概念/数值）", "description": "简短描述"}}]}}
 
-只返回JSON，不要其他内容。"""
+要求：
+1. 只提取文本中明确提到的实体
+2. 类型必须从给定类型中选择
+3. 描述要简洁，不超过50字
+4. 只返回JSON，不要其他内容。"""
 
             response = self.llm.invoke(prompt)
             content = (
@@ -349,86 +582,187 @@ class GraphRAGBuilder:
             json_match = re.search(r"\{.*\}", content, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
-                return [
-                    Entity(
-                        name=e["name"],
-                        entity_type=e.get("type", "未知"),
-                        description=e.get("description", ""),
+                entities = []
+                for e in data.get("entities", []):
+                    sentence = self._extract_sentence_context(text, e["name"])
+                    entities.append(
+                        Entity(
+                            name=e["name"],
+                            entity_type=e.get("type", "未知"),
+                            description=e.get("description", ""),
+                            source_context=sentence,
+                        )
                     )
-                    for e in data.get("entities", [])
-                ]
+                return entities
         except Exception as e:
             print(f"LLM实体提取错误: {e}")
 
         return []
 
+    def extract_relations_llm(self, text: str, entities: List[Entity] = None) -> List[Relation]:
+        """
+        使用大模型提取关系
+
+        Args:
+            text: 文本内容
+            entities: 已知实体列表（可选，用于指导抽取）
+
+        Returns:
+            关系列表
+        """
+        if not self.llm:
+            return []
+
+        try:
+            # 构建实体提示
+            entity_hint = ""
+            if entities:
+                entity_names = [e.name for e in entities[:20]]
+                entity_hint = f"\n\n已知实体：{', '.join(entity_names)}"
+
+            prompt = f"""请从以下文本中提取实体之间的关系，按JSON格式返回：
+
+文本：
+{text[:2000]}
+{entity_hint}
+
+请返回如下格式的JSON：
+{{"relations": [{{"source": "源实体", "target": "目标实体", "type": "关系类型", "description": "关系描述"}}]}}
+
+关系类型包括：属于、包含、负责、位于、成立于、开发、创造、发明、使用、采用、提供、支持、合作、导致、称为、关联等。
+
+要求：
+1. 只提取文本中明确表达的关系
+2. source和target必须是文本中提到的实体
+3. 关系类型要准确
+4. 只返回JSON，不要其他内容。"""
+
+            response = self.llm.invoke(prompt)
+            content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+
+            # 提取JSON
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                relations = []
+                for r in data.get("relations", []):
+                    sentence = self._extract_sentence_context(text, r.get("source", ""))
+                    relations.append(
+                        Relation(
+                            source=r["source"],
+                            target=r["target"],
+                            relation_type=r.get("type", "关联"),
+                            context=text[:100],
+                            confidence=0.8,  # LLM抽取的关系置信度
+                            source_sentence=sentence,
+                        )
+                    )
+                return relations
+        except Exception as e:
+            print(f"LLM关系提取错误: {e}")
+
+        return []
+
     def build_from_documents(
-        self, documents: List[str], use_llm: bool = False
+        self,
+        documents: List[str],
+        use_llm: bool = False,
+        show_progress: callable = None,
     ) -> KnowledgeGraph:
         """
         从文档构建知识图谱（LLM+规则混合，消歧、过滤）
+
+        Args:
+            documents: 文档列表
+            use_llm: 是否使用LLM增强抽取
+            show_progress: 进度回调函数
+
+        Returns:
+            构建的知识图谱
         """
         self.graph = KnowledgeGraph()
         entity_dict = {}  # name -> Entity
         relation_set = set()  # (source, target, relation_type)
+        all_relations = []  # 存储所有关系用于过滤
 
-        for doc in documents:
+        total_docs = len(documents)
+        for idx, doc in enumerate(documents):
+            if show_progress:
+                show_progress(idx + 1, total_docs, f"处理文档 {idx + 1}/{total_docs}")
+
             entities = []
             relations = []
+
             # LLM增强提取
             if use_llm and self.llm:
                 try:
                     llm_entities = self.extract_entities_llm(doc)
                     entities.extend(llm_entities)
+
+                    # LLM关系抽取
+                    llm_relations = self.extract_relations_llm(doc, llm_entities)
+                    relations.extend(llm_relations)
                 except Exception as e:
-                    print(f"LLM实体抽取异常: {e}")
+                    print(f"LLM抽取异常: {e}")
+
             # 规则补充
             try:
                 rule_entities = self.extract_entities_rules(doc)
                 entities.extend(rule_entities)
             except Exception as e:
                 print(f"规则实体抽取异常: {e}")
-            # 实体消歧与去重
-            for ent in entities:
-                key = ent.name.strip()
-                if not key or len(key) < 2 or len(key) > 20:
-                    continue
-                # 类型优先LLM结果
-                if key in entity_dict:
-                    if ent.entity_type != "未知":
-                        entity_dict[key].entity_type = ent.entity_type
-                    entity_dict[key].mentions += 1
-                else:
-                    entity_dict[key] = ent
 
-            # 关系抽取（LLM可扩展，暂用规则）
             try:
                 rule_relations = self.extract_relations_rules(doc)
                 relations.extend(rule_relations)
             except Exception as e:
                 print(f"规则关系抽取异常: {e}")
-            # 关系过滤
-            for rel in relations:
-                s, t = rel.source.strip(), rel.target.strip()
-                if (
-                    not s
-                    or not t
-                    or s == t
-                    or len(s) < 2
-                    or len(t) < 2
-                    or len(s) > 20
-                    or len(t) > 20
-                ):
+
+            # 实体消歧与去重
+            merged_entities = self.disambiguator.merge_entities(entities)
+
+            for ent in merged_entities:
+                key = ent.name.strip()
+                if not key or len(key) < 2 or len(key) > 20:
                     continue
-                rel_key = (s, t, rel.relation_type)
-                if rel_key not in relation_set:
-                    relation_set.add(rel_key)
+
+                if key in entity_dict:
+                    entity_dict[key].mentions += ent.mentions
+                    if ent.description and not entity_dict[key].description:
+                        entity_dict[key].description = ent.description
+                    if ent.source_context and not entity_dict[key].source_context:
+                        entity_dict[key].source_context = ent.source_context
+                else:
+                    entity_dict[key] = ent
+
+            # 收集所有关系
+            all_relations.extend(relations)
+
+        # 关系过滤
+        if show_progress:
+            show_progress(total_docs, total_docs, "过滤关系...")
+
+        filtered_relations = self.relation_filter.filter_relations(all_relations)
+
         # 添加实体
         for ent in entity_dict.values():
             self.graph.add_entity(ent)
-        # 添加关系
-        for s, t, rtype in relation_set:
-            self.graph.add_relation(Relation(source=s, target=t, relation_type=rtype))
+
+        # 添加过滤后的关系
+        for rel in filtered_relations:
+            s, t = rel.source.strip(), rel.target.strip()
+            rel_key = (s, t, rel.relation_type)
+            if rel_key not in relation_set:
+                relation_set.add(rel_key)
+                # 确保实体存在
+                if s not in self.graph.entities:
+                    self.graph.add_entity(Entity(name=s, entity_type="未知"))
+                if t not in self.graph.entities:
+                    self.graph.add_entity(Entity(name=t, entity_type="未知"))
+                self.graph.add_relation(rel)
+
         return self.graph
 
     def get_graph_summary(self) -> str:
@@ -573,11 +907,73 @@ class KnowledgeGraphVisualizer:
     def __init__(self, graph: KnowledgeGraph):
         self.graph = graph
 
+    def _get_entity_detail_fallback(self, entity_name: str) -> Dict:
+        """
+        获取实体详情的备用方法（兼容旧版本KnowledgeGraph）
+
+        Args:
+            entity_name: 实体名称
+
+        Returns:
+            实体详情字典
+        """
+        if entity_name not in self.graph.entities:
+            return {}
+
+        entity = self.graph.entities[entity_name]
+
+        # 出边关系
+        out_relations = [
+            {"target": r.target, "type": r.relation_type, "context": getattr(r, 'context', ''), "sentence": getattr(r, 'source_sentence', '')}
+            for r in self.graph.relations
+            if r.source == entity_name
+        ]
+
+        # 入边关系
+        in_relations = [
+            {"source": r.source, "type": r.relation_type, "context": getattr(r, 'context', ''), "sentence": getattr(r, 'source_sentence', '')}
+            for r in self.graph.relations
+            if r.target == entity_name
+        ]
+
+        # 相关实体
+        related = self.graph.get_related_entities(entity_name, depth=2)
+        related_with_type = []
+        for name in related:
+            if name in self.graph.entities and name != entity_name:
+                ent = self.graph.entities[name]
+                related_with_type.append({
+                    "name": name,
+                    "type": getattr(ent, 'entity_type', '未知')
+                })
+
+        # 相关文档片段
+        contexts = set()
+        for r in self.graph.relations:
+            if r.source == entity_name or r.target == entity_name:
+                ctx = getattr(r, 'context', '')
+                if ctx:
+                    contexts.add(ctx[:200])
+        doc_fragments = list(contexts)[:5]
+
+        return {
+            "entity": {
+                "name": entity.name,
+                "type": getattr(entity, 'entity_type', '未知'),
+                "mentions": getattr(entity, 'mentions', 1),
+                "description": getattr(entity, 'description', ''),
+            },
+            "out_relations": out_relations[:10],
+            "in_relations": in_relations[:10],
+            "related_entities": related_with_type[:15],
+            "doc_fragments": doc_fragments,
+        }
+
     def generate_html_visualization(
         self, height: int = 600, physics: bool = True, show_edge_labels: bool = False
     ) -> str:
         """
-        生成交互式HTML可视化
+        生成交互式HTML可视化（支持节点双击弹窗）
 
         Args:
             height: 画布高度
@@ -592,6 +988,8 @@ class KnowledgeGraphVisualizer:
 
         # 构建节点数据
         nodes = []
+        entity_details = {}  # 用于弹窗的实体详情
+
         for entity in self.graph.entities.values():
             color = self.ENTITY_COLORS.get(entity.entity_type, "#CCCCCC")
             nodes.append(
@@ -604,6 +1002,11 @@ class KnowledgeGraphVisualizer:
                     "group": entity.entity_type,
                 }
             )
+            # 获取实体详情用于弹窗（兼容旧版本KnowledgeGraph）
+            if hasattr(self.graph, 'get_entity_relations_detail'):
+                entity_details[entity.name] = self.graph.get_entity_relations_detail(entity.name)
+            else:
+                entity_details[entity.name] = self._get_entity_detail_fallback(entity.name)
 
         # 构建边数据
         edges = []
@@ -626,7 +1029,7 @@ class KnowledgeGraphVisualizer:
                     edge["label"] = relation.relation_type
                 edges.append(edge)
 
-        # 生成HTML
+        # 生成HTML（含双击弹窗功能）
         html = f"""
 <!DOCTYPE html>
 <html>
@@ -659,6 +1062,81 @@ class KnowledgeGraphVisualizer:
             display: inline-block;
             margin-right: 5px;
         }}
+        /* 弹窗样式 */
+        .modal {{
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }}
+        .modal-content {{
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80%;
+            overflow-y: auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }}
+        .modal-header {{
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }}
+        .modal-title {{
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+        }}
+        .modal-type {{
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }}
+        .close {{
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }}
+        .close:hover {{
+            color: black;
+        }}
+        .entity-section {{
+            margin-bottom: 15px;
+        }}
+        .entity-section h4 {{
+            color: #666;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }}
+        .relation-item {{
+            padding: 5px 0;
+            border-bottom: 1px dashed #eee;
+        }}
+        .relation-arrow {{
+            color: #4CAF50;
+            margin: 0 5px;
+        }}
+        .tag {{
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            margin-right: 5px;
+            background: #e0e0e0;
+        }}
     </style>
 </head>
 <body>
@@ -666,9 +1144,25 @@ class KnowledgeGraphVisualizer:
     <div class="legend">
         <strong>实体类型图例：</strong><br>
         {self._generate_legend()}
+        <br><small>💡 提示：双击节点可查看实体详情</small>
+    </div>
+
+    <!-- 弹窗 -->
+    <div id="entityModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div class="modal-header">
+                <span class="modal-title" id="modalTitle">实体名称</span>
+                <span class="modal-type" id="modalType">类型</span>
+            </div>
+            <div id="modalBody"></div>
+        </div>
     </div>
 
     <script>
+        // 实体详情数据
+        const entityDetails = {self._to_json(entity_details)};
+
         // 节点数据
         var nodes = new vis.DataSet({self._to_json(nodes)});
 
@@ -722,6 +1216,109 @@ class KnowledgeGraphVisualizer:
             }}
         }};
         var network = new vis.Network(container, data, options);
+
+        // 双击事件 - 显示实体详情弹窗
+        network.on("doubleClick", function(params) {{
+            if (params.nodes.length > 0) {{
+                var nodeId = params.nodes[0];
+                showEntityModal(nodeId);
+            }}
+        }});
+
+        // 显示实体详情弹窗
+        function showEntityModal(entityName) {{
+            const detail = entityDetails[entityName];
+            if (!detail) {{
+                alert('未找到实体详情: ' + entityName);
+                return;
+            }}
+
+            // 设置标题
+            document.getElementById('modalTitle').textContent = detail.entity.name;
+
+            // 设置类型标签（带颜色）
+            const typeSpan = document.getElementById('modalType');
+            typeSpan.textContent = detail.entity.type;
+            const colors = {{
+                '人物': '#FF6B6B', '组织': '#4ECDC4', '地点': '#45B7D1',
+                '时间': '#96CEB4', '产品': '#FFEAA7', '事件': '#DDA0DD',
+                '概念': '#98D8C8', '数值': '#F7DC6F'
+            }};
+            typeSpan.style.backgroundColor = colors[detail.entity.type] || '#CCCCCC';
+
+            // 构建内容
+            let html = '';
+
+            // 基本信息
+            html += '<div class="entity-section">';
+            html += '<p><strong>出现次数:</strong> ' + detail.entity.mentions + '</p>';
+            if (detail.entity.description) {{
+                html += '<p><strong>描述:</strong> ' + detail.entity.description + '</p>';
+            }}
+            html += '</div>';
+
+            // 出边关系
+            if (detail.out_relations && detail.out_relations.length > 0) {{
+                html += '<div class="entity-section"><h4>🔗 出边关系</h4>';
+                detail.out_relations.forEach(r => {{
+                    html += '<div class="relation-item">';
+                    html += '<span class="tag">' + r.type + '</span>';
+                    html += '<span class="relation-arrow">→</span>';
+                    html += '<strong>' + r.target + '</strong>';
+                    html += '</div>';
+                }});
+                html += '</div>';
+            }}
+
+            // 入边关系
+            if (detail.in_relations && detail.in_relations.length > 0) {{
+                html += '<div class="entity-section"><h4>🔗 入边关系</h4>';
+                detail.in_relations.forEach(r => {{
+                    html += '<div class="relation-item">';
+                    html += '<strong>' + r.source + '</strong>';
+                    html += '<span class="relation-arrow">→</span>';
+                    html += '<span class="tag">' + r.type + '</span>';
+                    html += '</div>';
+                }});
+                html += '</div>';
+            }}
+
+            // 相关实体
+            if (detail.related_entities && detail.related_entities.length > 0) {{
+                html += '<div class="entity-section"><h4>🌐 相关实体</h4><p>';
+                detail.related_entities.slice(0, 10).forEach(e => {{
+                    html += '<span class="tag" style="background:' + (colors[e.type] || '#eee') + '">' + e.name + '</span> ';
+                }});
+                html += '</p></div>';
+            }}
+
+            // 相关文档片段
+            if (detail.doc_fragments && detail.doc_fragments.length > 0) {{
+                html += '<div class="entity-section"><h4>📄 相关文档片段</h4>';
+                detail.doc_fragments.forEach((frag, i) => {{
+                    html += '<div style="background:#f5f5f5;padding:8px;margin:5px 0;border-radius:4px;font-size:0.9em;">';
+                    html += frag + '...';
+                    html += '</div>';
+                }});
+                html += '</div>';
+            }}
+
+            document.getElementById('modalBody').innerHTML = html;
+            document.getElementById('entityModal').style.display = 'block';
+        }}
+
+        // 关闭弹窗
+        function closeModal() {{
+            document.getElementById('entityModal').style.display = 'none';
+        }}
+
+        // 点击弹窗外部关闭
+        window.onclick = function(event) {{
+            var modal = document.getElementById('entityModal');
+            if (event.target == modal) {{
+                modal.style.display = 'none';
+            }}
+        }}
     </script>
 </body>
 </html>
@@ -737,10 +1334,9 @@ class KnowledgeGraphVisualizer:
             )
         return "".join(legend_items)
 
-    def _to_json(self, data: list) -> str:
+    def _to_json(self, data) -> str:
         """将数据转换为JSON字符串"""
         import json
-
         return json.dumps(data, ensure_ascii=False)
 
 
