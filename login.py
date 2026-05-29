@@ -2,6 +2,7 @@ import hmac
 import streamlit as st
 import json
 import os
+import uuid
 
 USER_FILE = "users.json"
 
@@ -20,56 +21,152 @@ def save_users(users):
         json.dump(users, f, ensure_ascii=False, indent=2)
 
 
-def login_and_register(show_warning=True):
-    # 注册流程示例
+def check_login():
+    """统一的登录检查函数，所有页面都应该调用此函数"""
+    if "logged_in_user" not in st.session_state or not st.session_state.logged_in_user:
+        return False
+    return True
+
+
+def require_login():
+    """需要登录的页面调用此函数，未登录时显示登录界面并停止执行"""
+    if not check_login():
+        login_and_register()
+        st.stop()
+
+
+def login_and_register(show_warning=True, key_prefix=None):
+    """
+    显示登录/注册界面
+
+    Args:
+        show_warning: 是否显示警告提示
+        key_prefix: 表单 key 前缀，用于避免重复 key 错误
+    """
+    # 生成唯一的 key 前缀
+    if key_prefix is None:
+        key_prefix = str(uuid.uuid4())[:8]
+
+    # 自定义样式
+    st.markdown(
+        """
+    <style>
+        .login-header {
+            text-align: center;
+            padding: 2rem 0;
+        }
+        .login-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(120deg, #ff6b6b, #feca57, #48dbfb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    # 登录页面标题
+    st.markdown(
+        """
+    <div class="login-header">
+        <div class="login-title">🧊 小橙子智能助手</div>
+        <p style="color: #666; margin-top: 0.5rem;">欢迎回来，请登录或注册</p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
     user_dict = load_users()
-    tab1, tab2 = st.tabs(["🔐 登录", "🆕 注册"])
+    tab1, tab2 = st.tabs(["🔐 登录账号", "🆕 注册账号"])
 
     with tab1:
-        # 如果 session_state 里有记住的用户名，就填充默认值
+        # 登录表单
         default_username = st.session_state.get("remember_me", "")
-        # 如果用户名被自动填充，强制清空密码输入框
-        if default_username and "login_password" in st.session_state:
-            st.session_state["login_password"] = ""
-        username = st.text_input("用户名", key="login_username", value=default_username)
-        password = st.text_input("密码", type="password", key="login_password")
-        remember = st.checkbox(
-            "记住我", key="remember_checkbox", value=bool(default_username)
-        )
-        if st.button("登录", key="login_btn"):
-            # 登录按钮点击后无论成功或失败都清理密码
-            try:
+
+        col1, col2, col3 = st.columns([1, 2, 1])
+
+        with col2:
+            username = st.text_input(
+                "用户名",
+                key=f"{key_prefix}_login_username",
+                value=default_username,
+                placeholder="请输入用户名",
+            )
+            password = st.text_input(
+                "密码",
+                type="password",
+                key=f"{key_prefix}_login_password",
+                placeholder="请输入密码",
+            )
+            remember = st.checkbox(
+                "记住我的登录状态",
+                key=f"{key_prefix}_remember_checkbox",
+                value=bool(default_username),
+            )
+
+            if st.button(
+                "🚀 登录", key=f"{key_prefix}_login_btn", use_container_width=True
+            ):
                 if username in user_dict and hmac.compare_digest(
                     password,
                     user_dict[username],
                 ):
-                    show_warning = False
                     st.session_state.logged_in_user = username
-                    st.success("登录成功！", icon="✅")
-                    # 如果勾选记住我，就存用户名；否则清空
                     if remember:
                         st.session_state["remember_me"] = username
                     else:
                         st.session_state.pop("remember_me", None)
+                    st.success("✅ 登录成功！欢迎回来~")
                     st.rerun()
                 else:
-                    show_warning = False
-                    st.error("用户名或密码错误", icon="🚨")
-            finally:
-                st.session_state.pop("login_password", None)
+                    st.error("❌ 用户名或密码错误，请重试")
 
-        if show_warning and "logged_in_user" not in st.session_state:
-            st.warning("请先登录后再使用本页面~", icon="⚠️")
+            if show_warning and "logged_in_user" not in st.session_state:
+                st.info("👋 请先登录后再使用本系统")
+
     with tab2:
-        new_username = st.text_input("注册用户名", key="register_username")
-        new_password = st.text_input(
-            "注册密码", type="password", key="register_password"
-        )
-        if st.button("注册", key="register_btn"):
-            if new_username in user_dict:
-                st.warning("该用户名已被注册", icon="⚠️")
-            else:
-                user_dict[new_username] = new_password
-                save_users(user_dict)
-                st.success("注册成功，请返回登录", icon="✅")
-                show_warning = False
+        # 注册表单
+        col1, col2, col3 = st.columns([1, 2, 1])
+
+        with col2:
+            new_username = st.text_input(
+                "用户名",
+                key=f"{key_prefix}_register_username",
+                placeholder="请设置用户名",
+            )
+            new_password = st.text_input(
+                "密码",
+                type="password",
+                key=f"{key_prefix}_register_password",
+                placeholder="请设置密码",
+            )
+            confirm_password = st.text_input(
+                "确认密码",
+                type="password",
+                key=f"{key_prefix}_register_password_confirm",
+                placeholder="请再次输入密码",
+            )
+
+            if st.button(
+                "📝 注册账号",
+                key=f"{key_prefix}_register_btn",
+                use_container_width=True,
+            ):
+                if not new_username:
+                    st.warning("⚠️ 用户名不能为空")
+                elif not new_password:
+                    st.warning("⚠️ 密码不能为空")
+                elif new_password != confirm_password:
+                    st.warning("⚠️ 两次输入的密码不一致")
+                elif new_username in user_dict:
+                    st.warning("⚠️ 该用户名已被注册，请换一个")
+                else:
+                    user_dict[new_username] = new_password
+                    save_users(user_dict)
+                    st.success("✅ 注册成功！请切换到登录页面登录")
+
+    # 底部提示
+    st.markdown("---")
+    st.caption("💡 首次使用请先注册账号，已有账号请直接登录")

@@ -9,16 +9,29 @@ from langchain_community.chat_message_histories import StreamlitChatMessageHisto
 from langchain_community.document_loaders import TextLoader, Docx2txtLoader
 from typing import List, Dict, Any, Optional, Tuple
 from langchain_core.prompts import PromptTemplate
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+
+# from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.agents import AgentExecutor
 from langchain.agents.agent_toolkits import VectorStoreToolkit, VectorStoreInfo
 from langchain_core.vectorstores import VectorStore
 from langchain_core.documents import Document
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
+from login import require_login
+
+# 导入 GraphRAG 模块
+from graphrag import (
+    GraphRAGBuilder,
+    GraphRAGRetriever,
+    KnowledgeGraph,
+    KnowledgeGraphVisualizer,
+    ReasoningExplainer,
+)
 
 # 本地模型: 使用 Ollama 替代通义大模型
 from langchain_ollama import ChatOllama
+
 # 云端模型: 使用 OpenAI 兼容接口 (通义/DeepSeek)
 from langchain_openai import ChatOpenAI
 from langchain.tools.retriever import create_retriever_tool
@@ -29,7 +42,20 @@ from pydantic import PrivateAttr
 
 # 设置页面配置
 st.set_page_config(page_title="文档问答", layout="wide")
-st.title("文档问答")
+
+# ========== 统一登录检查 ==========
+require_login()
+
+st.title("📄 文档问答（GraphRAG 增强版）")
+
+# GraphRAG 状态初始化
+if "knowledge_graph" not in st.session_state:
+    st.session_state.knowledge_graph = None
+if "use_graphrag" not in st.session_state:
+    st.session_state.use_graphrag = False  # 默认关闭
+if "graph_built" not in st.session_state:
+    st.session_state.graph_built = False
+
 bot_id = "doc_bot"
 col1, col2 = st.columns([0.5, 0.5])
 
@@ -47,7 +73,14 @@ upload_files = col1.file_uploader(
     accept_multiple_files=True,
     key="uploader",
 )
-print(upload_files)
+
+# 文件上传后只做一次分割和嵌入，缓存到 session_state
+if "vectorstore_cache" not in st.session_state:
+    st.session_state.vectorstore_cache = None
+if "splits_cache" not in st.session_state:
+    st.session_state.splits_cache = None
+if "doc_stat_cache" not in st.session_state:
+    st.session_state.doc_stat_cache = None
 
 
 def print_info(total_length, chunk_size, chunk_overlap):
@@ -415,11 +448,24 @@ col1_exp = col1.expander("读取并分割文件")
 
 
 # 调用 configure_retriever 并显示文档加载信息
-vectorstore, splits, len_files, total_length, chunk_size, chunk_overlap = (
-    configure_retriever(list(st.session_state["uploaded_files"].values()))
-)
+if st.session_state.vectorstore_cache is None or st.session_state.splits_cache is None:
+    vectorstore, splits, len_files, total_length, chunk_size, chunk_overlap = (
+        configure_retriever(list(st.session_state["uploaded_files"].values()))
+    )
+    st.session_state.vectorstore_cache = vectorstore
+    st.session_state.splits_cache = splits
+    st.session_state.doc_stat_cache = (
+        len_files,
+        total_length,
+        chunk_size,
+        chunk_overlap,
+    )
+else:
+    vectorstore = st.session_state.vectorstore_cache
+    splits = st.session_state.splits_cache
+    len_files, total_length, chunk_size, chunk_overlap = st.session_state.doc_stat_cache
 print_info(total_length, chunk_size, chunk_overlap)
-# 在 col1 展示分割后的片段表格
+# 展示分割片段表格
 df = pd.DataFrame(
     {
         "片段ID": range(1, len(splits) + 1),
@@ -430,10 +476,110 @@ with col1_exp:
     st.success(f"✅ 加载了 {len_files} 个文档，分割为 {len(splits)} 个片段")
     st.dataframe(df, height=300, use_container_width=True)
 
+# ========== GraphRAG 知识图谱构建 ==========
+
+graph_col1, graph_col2 = col1.columns([2, 1])
+
+
+# 控制知识图谱增强开关和构建按钮
+with graph_col1:
+    st.toggle("🧠 启用知识图谱增强", key="use_graphrag")
+with graph_col2:
+    build_graph_btn = st.button("🔨 构建知识图谱", use_container_width=True)
+
+# 只有在用户主动点击构建且开启增强时才构建知识图谱
+if st.session_state.use_graphrag and build_graph_btn:
+    with col1.status("正在构建知识图谱...", expanded=True) as status:
+        st.write("📄 提取文档内容...")
+        documents = [doc.page_content for doc in splits]
+        st.write("🔍 识别实体和关系...")
+        graph_builder = GraphRAGBuilder()
+        st.session_state.knowledge_graph = graph_builder.build_from_documents(
+            documents, use_llm=False
+        )
+        st.session_state.graph_built = True
+        st.write("✅ 知识图谱构建完成！")
+        status.update(label="知识图谱构建完成", state="complete")
+
+# 只要知识图谱已构建且增强开关开启，就允许摘要和可视化
+if st.session_state.use_graphrag and st.session_state.knowledge_graph:
+    with col1.expander("📊 知识图谱摘要", expanded=False):
+        graph_builder = GraphRAGBuilder()
+        graph_builder.graph = st.session_state.knowledge_graph
+        st.markdown(graph_builder.get_graph_summary())
+        # 显示部分实体
+        if st.session_state.knowledge_graph.entities:
+            st.markdown("### 主要实体")
+            entity_df = pd.DataFrame(
+                [
+                    {"实体名": e.name, "类型": e.entity_type, "出现次数": e.mentions}
+                    for e in sorted(
+                        st.session_state.knowledge_graph.entities.values(),
+                        key=lambda x: x.mentions,
+                        reverse=True,
+                    )[:20]
+                ]
+            )
+            st.dataframe(entity_df, use_container_width=True, hide_index=True)
+        # 显示部分关系
+        if st.session_state.knowledge_graph.relations:
+            st.markdown("### 主要关系")
+            relation_df = pd.DataFrame(
+                [
+                    {"源实体": r.source, "关系": r.relation_type, "目标实体": r.target}
+                    for r in st.session_state.knowledge_graph.relations[:20]
+                ]
+            )
+            st.dataframe(relation_df, use_container_width=True, hide_index=True)
+
+    # ========== 知识图谱可视化 ==========
+    with col1.expander("🌐 知识图谱可视化", expanded=False):
+        # 可视化参数独立于知识图谱构建
+        if "viz_height" not in st.session_state:
+            st.session_state.viz_height = 600
+        if "enable_physics" not in st.session_state:
+            st.session_state.enable_physics = True
+        viz_col1, viz_col2 = st.columns([1, 1])
+        with viz_col1:
+            st.session_state.viz_height = st.slider(
+                "画布高度", 400, 1000, st.session_state.viz_height, step=100
+            )
+        with viz_col2:
+            st.session_state.enable_physics = st.checkbox(
+                "启用物理引擎", value=st.session_state.enable_physics
+            )
+
+        # 生成并显示可视化（只用已构建的知识图谱，不重建）
+        visualizer = KnowledgeGraphVisualizer(st.session_state.knowledge_graph)
+        html_content = visualizer.generate_html_visualization(
+            height=st.session_state.viz_height,
+            physics=st.session_state.enable_physics,
+            show_edge_labels=True,
+        )
+        st.components.v1.html(
+            html_content, height=st.session_state.viz_height + 100, scrolling=True
+        )
+
+        # 实体详情查看
+        st.markdown("---")
+        st.markdown("### 🔍 实体详情查看")
+        entity_names = list(st.session_state.knowledge_graph.entities.keys())
+        selected_entity = st.selectbox(
+            "选择实体查看详情",
+            options=entity_names,
+            index=0 if entity_names else None,
+        )
+        if selected_entity:
+            explainer = ReasoningExplainer(st.session_state.knowledge_graph)
+            st.markdown(explainer.explain_entity_relations(selected_entity))
+
 
 if st.session_state.messages[bot_id] == [] or col1.button("清空聊天记录"):
     st.session_state["messages"][bot_id] = [
-        {"role": "assistant", "content": "您好，我是文档问答助手，请问有什么可以帮您？"}
+        {
+            "role": "assistant",
+            "content": "您好，我是文档问答助手（GraphRAG增强版），请问有什么可以帮您？",
+        }
     ]
 
 for msg in st.session_state.messages[bot_id]:
@@ -442,11 +588,55 @@ for msg in st.session_state.messages[bot_id]:
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 4})  # 增加 k 以提高召回率
 
-# 4. 创建一个名为 "文档检索" 的工具 (关键修正!)
-# 这里的工具名称必须与 Prompt 中的 `Action` 字段完全一致
+
+# ========== GraphRAG 增强检索工具 ==========
+def graphrag_retrieve(query: str) -> str:
+    """GraphRAG 增强检索函数"""
+    # 基础向量检索
+    docs = retriever.get_relevant_documents(query)
+
+    # 构建基础结果
+    result = "【向量检索结果】\n"
+    for i, doc in enumerate(docs):
+        result += f"\n文档片段 {i+1}:\n{doc.page_content}\n"
+
+    # 知识图谱增强
+    if st.session_state.use_graphrag and st.session_state.knowledge_graph:
+        result += "\n\n【知识图谱增强信息】\n"
+
+        # 查找查询中的实体
+        found_entities = []
+        for entity_name in st.session_state.knowledge_graph.entities:
+            if entity_name in query:
+                found_entities.append(entity_name)
+
+        if found_entities:
+            result += f"识别到的实体: {', '.join(found_entities)}\n\n"
+
+            # 获取相关实体和上下文
+            for entity_name in found_entities[:3]:
+                entity = st.session_state.knowledge_graph.entities.get(entity_name)
+                if entity:
+                    result += f"📌 {entity_name}（{entity.entity_type}）\n"
+
+                    # 获取相关实体
+                    related = st.session_state.knowledge_graph.get_related_entities(
+                        entity_name
+                    )
+                    if related:
+                        result += f"   相关实体: {', '.join(list(related)[:5])}\n"
+
+                result += "\n"
+        else:
+            result += "未在查询中识别到已知实体。\n"
+
+    return result
+
+
+# 创建检索工具
 tool = create_retriever_tool(
     retriever,
-    "文档检索",  # <--- 这个名字至关重要
+    "文档检索",  # 这个名字至关重要
     "此工具用于从上传的文档中检索与用户问题相关的信息。请将用户的原始问题作为输入。",
 )
 tools = [tool]
@@ -520,6 +710,7 @@ if "local_model_name" not in st.session_state:
 if "cloud_model_name" not in st.session_state:
     st.session_state.cloud_model_name = "deepseek-v4-flash"
 
+
 # 获取模型实例
 def get_llm():
     if st.session_state.model_provider == "local":
@@ -536,6 +727,7 @@ def get_llm():
             api_key=DASHSCOPE_API_KEY,
             base_url=DASHSCOPE_BASE_URL,
         )
+
 
 llm = get_llm()
 
@@ -560,6 +752,46 @@ if user_query:
         {"role": "Human", "content": user_query}
     )
     with col2.chat_message("assistant"):
+        # 显示知识图谱增强信息
+        if st.session_state.use_graphrag and st.session_state.knowledge_graph:
+            with st.expander("🧠 知识图谱分析", expanded=False):
+                kg_info = "识别到的实体：\n"
+                found_entities = []
+                for entity_name in st.session_state.knowledge_graph.entities:
+                    if entity_name in user_query:
+                        found_entities.append(entity_name)
+
+                if found_entities:
+                    for entity_name in found_entities[:5]:
+                        entity = st.session_state.knowledge_graph.entities.get(
+                            entity_name
+                        )
+                        if entity:
+                            related = (
+                                st.session_state.knowledge_graph.get_related_entities(
+                                    entity_name
+                                )
+                            )
+                            kg_info += (
+                                f"\n📌 **{entity_name}** ({entity.entity_type})\n"
+                            )
+                            if related:
+                                kg_info += f"   相关: {', '.join(list(related)[:5])}\n"
+                else:
+                    kg_info += "未在问题中识别到已知实体"
+                st.markdown(kg_info)
+
+            # ========== 推理路径展示 ==========
+            with st.expander("🔍 检索推理路径", expanded=True):
+                explainer = ReasoningExplainer(st.session_state.knowledge_graph)
+                # 获取检索到的文档
+                retrieved_docs = retriever.get_relevant_documents(user_query)
+                st.markdown(
+                    explainer.explain_retrieval(
+                        user_query, retrieved_docs, found_entities
+                    )
+                )
+
         agent_container = st.container()  # Dedicated container for agent output
         st_cb = StreamlitCallbackHandler(agent_container, expand_new_thoughts=True)
         try:

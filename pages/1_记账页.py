@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+from login import require_login
 
-if "logged_in_user" not in st.session_state or not st.session_state.logged_in_user:
-    st.stop()
+# ========== 统一登录检查 ==========
+require_login()
 
 user = st.session_state.logged_in_user
 if "records" not in st.session_state:

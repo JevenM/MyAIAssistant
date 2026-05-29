@@ -101,6 +101,9 @@ MyAIAssistant/
 3. 停止服务 Stop Streamlit app
     ```shell
     taskkill /F /IM streamlit.exe 2>/dev/null || pkill -f streamlit 2>/dev/null || echo "Streamlit stopped"
+
+    或者
+    netstat -ano | grep -E ":(8501|8502|8503|8504|8505)" | grep LISTENING
     ```
 
 ---
