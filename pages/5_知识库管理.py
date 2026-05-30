@@ -45,7 +45,7 @@ kb_manager = st.session_state.kb_manager
 
 # ========== 页面标题 ==========
 st.title("📚 知识库管理")
-st.markdown("---")
+
 
 # ========== 统计信息 ==========
 stats = kb_manager.get_stats()
@@ -56,7 +56,7 @@ c3.metric("片段总数", stats["total_chunks"])
 c4.metric("实体总数", stats["total_entities"])
 c5.metric("关系总数", stats["total_relations"])
 
-st.markdown("---")
+# st.markdown("---")
 
 # ========== 主界面布局 ==========
 tab1, tab2, tab3 = st.tabs(["📋 知识库列表", "➕ 创建知识库", "🌐 知识图谱"])
@@ -154,7 +154,7 @@ with tab1:
     if "view_kb_id" in st.session_state and st.session_state.view_kb_id:
         kb = kb_manager.get_kb(st.session_state.view_kb_id)
         if kb:
-            st.markdown("---")
+            # st.markdown("---")
             st.markdown(f"## 📋 {kb.name}")
             if st.button("❌ 关闭"):
                 st.session_state.view_kb_id = None
@@ -250,7 +250,7 @@ with tab3:
             if merged:
                 # 统计
                 display_graph_stats(merged)
-                st.markdown("---")
+                # st.markdown("---")
 
                 # 可视化控制
                 c1, c2, c3, c4 = st.columns([0.8, 0.4, 1.5, 0.3])
@@ -320,7 +320,7 @@ with tab3:
                     else "💡 3D视图：左键旋转，右键平移，滚轮缩放，点击节点查看详情"
                 )
 
-                st.markdown("---")
+                # st.markdown("---")
 
                 # 数据管理
                 dt1, dt2, dt3 = st.tabs(["📌 实体", "🔗 关系", "✏️ 编辑"])
@@ -377,7 +377,7 @@ with tab3:
                                 st.success("已删除")
                                 st.rerun()
 
-                        st.markdown("---")
+                        # st.markdown("---")
                         st.markdown("#### 添加实体")
                         ac1, ac2, ac3 = st.columns(3)
                         with ac1:
@@ -432,5 +432,5 @@ with tab3:
                         st.info("暂无实体")
 
 # 页脚
-st.markdown("---")
+# st.markdown("---")
 st.caption("💡 知识库数据永久存储在本地，下次登录仍可使用")

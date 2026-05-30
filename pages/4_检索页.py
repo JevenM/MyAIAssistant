@@ -37,6 +37,15 @@ from langchain_core.agents import AgentAction, AgentFinish
 from langchain.agents import BaseSingleActionAgent
 from pydantic import PrivateAttr
 
+# 统一配置文件
+from llm_config import (
+    DASHSCOPE_API_KEY,
+    DASHSCOPE_BASE_URL,
+    LOCAL_MODELS,
+    CLOUD_MODELS,
+    EMBEDDING_MODEL_PATH,
+)
+
 # ========== 页面配置 ==========
 st.set_page_config(page_title="文档问答", layout="wide")
 require_login()
@@ -72,7 +81,7 @@ if bot_id not in st.session_state["messages"]:
     st.session_state["messages"][bot_id] = []
 
 # ========== Embedding 配置 ==========
-MODEL_PATH = "E:\\Doctor1\\coding\\Langchain-Chatchat\\_models\\m3e-base"
+MODEL_PATH = EMBEDDING_MODEL_PATH
 
 
 @st.cache_resource
@@ -446,20 +455,18 @@ if retriever:
                 llm = None
                 if st.session_state.use_llm_extract:
                     if st.session_state.get("model_provider") == "local":
+                        local_model = st.session_state.get("local_model_name", LOCAL_MODELS[0] if LOCAL_MODELS else "qwen2.5:3b")
                         llm = ChatOllama(
-                            model=st.session_state.get(
-                                "local_model_name", "qwen2.5:3b"
-                            ),
+                            model=local_model,
                             temperature=0.3,
                         )
                     else:
+                        cloud_model = st.session_state.get("cloud_model_name", CLOUD_MODELS[0] if CLOUD_MODELS else "deepseek-v4-flash")
                         llm = ChatOpenAI(
-                            model=st.session_state.get(
-                                "cloud_model_name", "deepseek-v4-flash"
-                            ),
+                            model=cloud_model,
                             temperature=0.3,
-                            api_key="sk-884a7ea43d0e40adba0353f8ea21fc15",
-                            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                            api_key=DASHSCOPE_API_KEY,
+                            base_url=DASHSCOPE_BASE_URL,
                         )
 
                 graph_builder = GraphRAGBuilder(llm=llm)
@@ -506,7 +513,8 @@ if retriever:
                 html = visualizer.generate_html_visualization(
                     height=viz_height, physics=True, show_edge_labels=show_edge_labels, use_3d=use_3d_rg
                 )
-                st.components.v1.html(html, height=viz_height + 50)
+                # 统一高度：iframe高度等于画布高度，无额外空白
+                st.components.v1.html(html, height=viz_height)
                 if use_3d_rg:
                     st.caption("💡 3D视图：左键旋转，右键平移，滚轮缩放，点击节点查看详情")
                 else:
@@ -534,19 +542,20 @@ for msg in st.session_state.messages[bot_id]:
     col2.chat_message(msg["role"]).write(msg["content"])
 
 # ========== 模型配置 ==========
-DASHSCOPE_API_KEY = "sk-884a7ea43d0e40adba0353f8ea21fc15"
-DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+# API 配置已从 llm_config.py 导入
 
 
 def get_llm():
     provider = st.session_state.get("model_provider", "local")
     if provider == "local":
+        local_model = st.session_state.get("local_model_name", LOCAL_MODELS[0] if LOCAL_MODELS else "qwen2.5:3b")
         return ChatOllama(
-            model=st.session_state.get("local_model_name", "qwen2.5:3b"),
+            model=local_model,
             temperature=0.7,
         )
+    cloud_model = st.session_state.get("cloud_model_name", CLOUD_MODELS[0] if CLOUD_MODELS else "deepseek-v4-flash")
     return ChatOpenAI(
-        model=st.session_state.get("cloud_model_name", "deepseek-v4-flash"),
+        model=cloud_model,
         temperature=0.7,
         api_key=DASHSCOPE_API_KEY,
         base_url=DASHSCOPE_BASE_URL,

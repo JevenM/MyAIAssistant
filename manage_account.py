@@ -29,6 +29,19 @@ from langchain_core.runnables import RunnableLambda
 from login import require_login
 from user_data_manager import get_user_data_manager
 
+# 统一配置文件
+from llm_config import (
+    DASHSCOPE_API_KEY,
+    DASHSCOPE_BASE_URL,
+    SEARCHAPI_API_KEY,
+    SERPER_API_KEY,
+    TAVILY_API_KEY,
+    SERPAPI_KEY,
+    CLOUD_MODELS,
+    LOCAL_MODELS,
+    THINKING_MODEL,
+)
+
 # ========== 页面配置 ==========
 st.set_page_config(
     page_title="开始聊天 - 智能助手",
@@ -40,14 +53,8 @@ st.set_page_config(
 require_login()
 
 # ========== API 配置 ==========
-DASHSCOPE_API_KEY = "sk-884a7ea43d0e40adba0353f8ea21fc15"
-DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-SEARCHAPI_API_KEY = "uMGPH1BuhRnHeurzpya6YEae"
-
-# 免费搜索 API Keys
-SERPER_API_KEY = os.environ.get("SERPER_API_KEY", "")
-TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-SERPAPI_KEY = os.environ.get("SERPAPI_KEY", "")
+# 所有 API Key 和配置已迁移到 llm_config.py 文件统一管理
+# 如需修改配置，请编辑 llm_config.py 文件
 
 # ========== 自定义样式 ==========
 st.markdown(
@@ -93,9 +100,9 @@ def get_model():
 
 
 def get_thinking_model():
-    """获取支持思考过程的模型（DeepSeek Reasoner）"""
+    """获取支持思考过程的模型"""
     return ChatOpenAI(
-        model="deepseek-reasoner",
+        model=THINKING_MODEL,
         streaming=True,
         api_key=DASHSCOPE_API_KEY,
         base_url=DASHSCOPE_BASE_URL,
@@ -276,10 +283,10 @@ with st.container():
         if st.session_state.model_provider == "local":
             local_model = st.selectbox(
                 "📦 本地模型",
-                options=["qwen2.5:7b", "qwen2.5:3b", "llama3.2", "mistral:7b"],
-                index=["qwen2.5:7b", "qwen2.5:3b", "llama3.2", "mistral:7b"].index(
+                options=LOCAL_MODELS,
+                index=LOCAL_MODELS.index(
                     st.session_state.local_model_name
-                ),
+                ) if st.session_state.local_model_name in LOCAL_MODELS else 0,
                 key="local_model_select",
             )
             if local_model != st.session_state.local_model_name:
@@ -288,31 +295,10 @@ with st.container():
         else:
             cloud_model = st.selectbox(
                 "☁️ 云端模型",
-                options=[
-                    "deepseek-v4-flash",
-                    # "deepseek-reasoner",
-                    "qwen3.6-plus",
-                    "qwen3.6-35b-a3b",
-                    # "qwen-turbo",
-                ],
-                index=(
-                    [
-                        "deepseek-v4-flash",
-                        # "deepseek-reasoner",
-                        "qwen3.6-plus",
-                        "qwen3.6-35b-a3b",
-                        # "qwen-turbo",
-                    ].index(st.session_state.cloud_model_name)
-                    if st.session_state.cloud_model_name
-                    in [
-                        "deepseek-v4-flash",
-                        # "deepseek-reasoner",
-                        "qwen3.6-plus",
-                        "qwen3.6-35b-a3b",
-                        # "qwen-turbo",
-                    ]
-                    else 0
-                ),
+                options=CLOUD_MODELS,
+                index=CLOUD_MODELS.index(
+                    st.session_state.cloud_model_name
+                ) if st.session_state.cloud_model_name in CLOUD_MODELS else 0,
                 key="cloud_model_select",
             )
             if cloud_model != st.session_state.cloud_model_name:

@@ -1110,7 +1110,7 @@ class KnowledgeGraphVisualizer:
 
     def generate_html_visualization(
         self,
-        height: int = 700,
+        height: int = 580,
         physics: bool = True,
         show_edge_labels: bool = False,
         filter_types: list = None,
@@ -1217,6 +1217,48 @@ class KnowledgeGraphVisualizer:
             border: 1px solid #ddd;
             border-radius: 8px;
             background: #fafafa;
+            position: relative;
+        }}
+        /* 加载动画 */
+        .loading-overlay {{
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(250,250,250,0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            border-radius: 8px;
+            transition: opacity 0.3s ease;
+        }}
+        .loading-overlay.hidden {{
+            opacity: 0;
+            pointer-events: none;
+        }}
+        .loading-spinner {{
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }}
+        .loading-text {{
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }}
+        .loading-stats {{
+            margin-top: 8px;
+            color: #999;
+            font-size: 12px;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
         }}
         .legend {{
             padding: 10px;
@@ -1313,7 +1355,13 @@ class KnowledgeGraphVisualizer:
     </style>
 </head>
 <body>
-    <div id="mynetwork"></div>
+    <div id="mynetwork">
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">正在渲染知识图谱...</div>
+            <div class="loading-stats">实体: {len(nodes)} 个 | 关系: {len(edges)} 条</div>
+        </div>
+    </div>
     <div class="legend">
         <strong>实体类型图例：</strong><br>
         {self._generate_legend()}
@@ -1356,39 +1404,61 @@ class KnowledgeGraphVisualizer:
                     face: 'Arial'
                 }},
                 borderWidth: 2,
-                shadow: true
+                shadow: false
             }},
             edges: {{
                 width: 2,
                 font: {{
-                    size: 10,
-                    align: 'middle'
+                    size: 11,
+                    align: 'middle',
+                    color: '#444444',
+                    background: 'rgba(255,255,255,0.7)',
+                    strokeWidth: 0
                 }},
                 arrows: {{
                     to: {{ enabled: true, scaleFactor: 0.5 }}
                 }},
                 smooth: {{
-                    type: 'continuous'
+                    type: 'continuous',
+                    forceDirection: 'none',
+                    roundness: 0.5
                 }}
             }},
             physics: {{
                 enabled: {str(physics).lower()},
                 stabilization: {{
-                    iterations: 200
+                    iterations: 100,
+                    updateInterval: 25
                 }},
                 barnesHut: {{
-                    gravitationalConstant: -2000,
-                    springLength: 100
+                    gravitationalConstant: -3000,
+                    springLength: 150,
+                    springConstant: 0.02,
+                    damping: 0.09
                 }}
             }},
             interaction: {{
                 hover: true,
                 tooltipDelay: 200,
                 zoomView: true,
-                dragView: true
+                dragView: true,
+                hideEdgesOnDrag: true,
+                hideNodesOnDrag: false
             }}
         }};
         var network = new vis.Network(container, data, options);
+
+        // 监听稳定化完成事件，隐藏加载动画
+        network.on("stabilizationIterationsDone", function() {{
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }});
+
+        // 如果没有启用物理引擎，直接隐藏加载动画
+        if (!{str(physics).lower()}) {{
+            setTimeout(() => {{
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }}, 500);
+        }}
 
         // 双击事件 - 显示实体详情弹窗
         network.on("doubleClick", function(params) {{
@@ -1539,9 +1609,52 @@ class KnowledgeGraphVisualizer:
             height: {height}px;
             background: radial-gradient(circle at center, #1a1a2e 0%, #0d0d1a 50%, #050510 100%);
             cursor: grab;
+            position: relative;
         }}
         #graph-container:active {{
             cursor: grabbing;
+        }}
+        /* 3D加载动画 */
+        .loading-overlay-3d {{
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0d0d1a 50%, #050510 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }}
+        .loading-overlay-3d.hidden {{
+            opacity: 0;
+            pointer-events: none;
+        }}
+        .loading-spinner-3d {{
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(100,100,150,0.3);
+            border-top-color: #3498db;
+            border-radius: 50%;
+            animation: spin3d 1s linear infinite;
+            box-shadow: 0 0 20px rgba(52,152,219,0.5);
+        }}
+        .loading-text-3d {{
+            margin-top: 20px;
+            color: #aaa;
+            font-size: 16px;
+            letter-spacing: 2px;
+        }}
+        .loading-stats-3d {{
+            margin-top: 10px;
+            color: #666;
+            font-size: 13px;
+        }}
+        @keyframes spin3d {{
+            to {{ transform: rotate(360deg); }}
         }}
         .legend {{
             position: absolute;
@@ -1606,11 +1719,12 @@ class KnowledgeGraphVisualizer:
     </style>
 </head>
 <body>
-    <div id="graph-container"></div>
-    <div class="legend">
-        <strong>实体类型图例</strong><br>
-        <small style="color:#666">共 {len(nodes)} 个实体，{len(edges)} 条关系</small><br><br>
-        {self._generate_3d_legend()}
+    <div id="graph-container">
+        <div class="loading-overlay-3d" id="loadingOverlay3d">
+            <div class="loading-spinner-3d"></div>
+            <div class="loading-text-3d">正在构建3D知识图谱</div>
+            <div class="loading-stats-3d">实体: {len(nodes)} 个 | 关系: {len(edges)} 条</div>
+        </div>
     </div>
 
     <div class="tooltip" id="tooltip">
@@ -1640,10 +1754,10 @@ class KnowledgeGraphVisualizer:
         // 创建高分辨率球体几何体
         const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
 
-        // 创建3D力图配置
+        // 创建3D力图配置 - 不使用.nodeLabel避免与自定义标签冲突
         const Graph = ForceGraph3D()(container)
             .graphData(graphData)
-            .nodeLabel('name')
+            .nodeLabel("name")
             .nodeColor(d => d.color)
             .nodeVal(d => d.val)
             .nodeOpacity(0.95)
@@ -1692,6 +1806,11 @@ class KnowledgeGraphVisualizer:
             .enableNavigationControls(true)
             .cameraPosition({{ z: 300 }});
 
+        // 3D图加载完成后隐藏加载动画
+        setTimeout(() => {{
+            document.getElementById('loadingOverlay3d').classList.add('hidden');
+        }}, 1500);
+
         // 添加环境光照
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         Graph.scene().add(ambientLight);
@@ -1718,7 +1837,7 @@ class KnowledgeGraphVisualizer:
         }});
 
         // 节点悬停效果
-        Graph.onNodeHover((node) => {{
+        /*Graph.onNodeHover((node) => {{
             if (node) {{
                 container.style.cursor = 'pointer';
                 nodeLabel.innerHTML = `<strong style="color:${{node.color}}">${{node.name}}</strong><br><small style="color:#666">${{node.group}}</small>`;
@@ -1738,6 +1857,7 @@ class KnowledgeGraphVisualizer:
                 requestAnimationFrame(updateLabelPosition);
             }}
         }}
+        */
 
         // 显示实体信息弹窗
         function showEntityInfo(node) {{

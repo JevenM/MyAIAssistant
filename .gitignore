@@ -1,3 +1,21 @@
-.streamlit/*
+# Streamlit 密钥文件（包含敏感信息）
+.streamlit/secrets.toml
+
+# 环境变量文件
+.env
+
+# 数据库和缓存
 chroma_db/*
-__pycache__/login.cpython-310.pyc
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 用户数据目录
+user_data/
+
+# 日志文件
+*.log
